@@ -108,6 +108,12 @@ export function setAgent(state, name, st, activity = "") {
 export function claudeEnv(extra = {}) {
   const env = { ...process.env, ...extra };
   delete env.CLAUDECODE;
+  // Started from inside a Claude app session (e.g. its preview pane)? That session's private auth token is inherited
+  // but isn't valid for the standalone CLI, and it would override your own `claude auth login`. Drop it.
+  if (env.CLAUDE_CODE_ENTRYPOINT) {
+    delete env.CLAUDE_CODE_ENTRYPOINT;
+    delete env.ANTHROPIC_AUTH_TOKEN;
+  }
   const anthropic = !env.ANTHROPIC_BASE_URL || /api\.anthropic\.com/.test(env.ANTHROPIC_BASE_URL);
   if (anthropic) {
     if (env.ANTHROPIC_BASE_URL) delete env.ANTHROPIC_BASE_URL;
