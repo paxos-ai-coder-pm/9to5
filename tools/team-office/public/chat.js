@@ -76,6 +76,7 @@ export function createChat() {
       <div class="p-head">🚀 PROPOSED RUN</div>
       <div class="p-task">${esc(p.task)}</div>
       <div class="p-dir">📁 ${esc(p.dir)}${p.isNew ? " <b>(new folder)</b>" : ""}</div>
+      ${p.allowGithub ? `<div class="p-github">🔓 This run may <b>commit and push to GitHub</b>${p.githubAccount ? ` as <b>${esc(p.githubAccount)}</b>` : ""} (no force-push or deletes). Starting it gives that permission for this run only.</div>` : ""}
       ${pending ? `<div class="p-actions"><button class="px-btn small" data-run="start" data-id="${esc(p.id)}">▶ START</button><button class="px-btn small ghost" data-run="dismiss" data-id="${esc(p.id)}">NOT YET</button></div>` : ""}
     </div>`;
   }

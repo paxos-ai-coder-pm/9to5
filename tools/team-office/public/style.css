@@ -260,6 +260,7 @@ body { padding-bottom: 20px; }
 .proposal .p-head { font-family: var(--px); font-size: 8px; color: #7ee07e; }
 .proposal .p-task { line-height: 1.15; white-space: pre-wrap; max-height: 220px; overflow-y: auto; }
 .proposal .p-dir { font-size: 16px; color: var(--text-secondary); word-break: break-all; }
+.proposal .p-github { font-size: 16px; color: #111; background: var(--warning); padding: 4px 6px; line-height: 1.15; }
 .proposal .p-actions { display: flex; gap: 8px; margin-top: 2px; }
 .run-bar { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-bottom: 3px solid var(--border); background: #1c2230; font-size: 17px; }
 .run-bar .r-status { font-family: var(--px); font-size: 8px; white-space: nowrap; }

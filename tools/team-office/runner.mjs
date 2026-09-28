@@ -27,6 +27,17 @@ const ALLOWED_TOOLS = [
   "Bash(cd:*)", "Bash(ls:*)", "Bash(mkdir:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(wc:*)", "Bash(grep:*)", "Bash(find:*)", "Bash(pwd)",
 ];
 
+// Extra rights for runs the user explicitly approved to publish (proposal card says so; Start = consent).
+const GITHUB_TOOLS = [
+  "Bash(git commit:*)", "Bash(git push:*)", "Bash(git remote:*)", "Bash(git branch:*)", "Bash(git checkout:*)", "Bash(git rm:*)",
+  "Bash(gh repo create:*)", "Bash(gh repo view:*)", "Bash(gh auth status:*)", "Bash(gh api user:*)",
+];
+// Never allowed, even for publishing runs.
+const DENIED_TOOLS = [
+  "Bash(git push --force:*)", "Bash(git push -f:*)", "Bash(git push --force-with-lease:*)", "Bash(git push --delete:*)",
+  "Bash(git reset --hard:*)", "Bash(gh repo delete:*)", "Bash(gh repo archive:*)", "Bash(gh auth:*)", "Bash(rm:*)",
+];
+
 let child = null;
 let stopping = false;
 let resumeTimer = null;
@@ -141,14 +152,15 @@ function resumeRun() {
     `Your Claude usage limit has reset — continue the team pipeline exactly where you left off. ` +
     `First run ${run.tCmd} resume to see the office board (done / active / blocked / ready tasks) and ${run.tCmd} inbox for any new messages from the user; ` +
     `then carry on with the remaining steps of the /team skill (re-spawn any teammate whose work was cut off, with the plan and what's already done). ` +
-    `Same HEADLESS rules as before: the user isn't watching this terminal, talk to them only via ${run.tCmd} say / inbox. Never git commit or push.`;
+    `Same HEADLESS rules as before: the user isn't watching this terminal, talk to them only via ${run.tCmd} say / inbox. ` +
+    (run.allowGithub ? `GitHub publishing is still allowed for this run as the task describes (no force-push, no deletes).` : `Never git commit or push.`);
   const next = { ...run, attempts: (run.attempts || 1) + 1, resumedAt: Date.now() };
   spawnRun(next, prompt, run.sessionId);
   emit({ ...readRun(), status: "resumed" });
 }
 
 /** Start a headless /team run. `handler(run)` is called on every status change. */
-export function startRun({ project, task }, handler) {
+export function startRun({ project, task, allowGithub = false }, handler) {
   if (handler) onEvent = handler;
   if (isRunning()) throw new Error("A run is already in progress or waiting for a usage reset — stop it first.");
   const p = resolveProject(project);
@@ -160,10 +172,13 @@ export function startRun({ project, task }, handler) {
     `(HEADLESS: launched from the team office after the user confirmed in chat. The user is not watching this terminal — follow the skill's Headless mode rules.\n` +
     `- Project directory: ${p.dir}${p.isNew ? " — a new, empty project: scaffold it here" : ""}.\n` +
     `- The team office CLI ("T" in the skill) is exactly: ${tCmd} — it lives outside this project; don't look for it. Your first command must be: ${tCmd} init "<one-line task summary>"\n` +
-    `- Post the plan summary with T say and wait for the user's "go" before building. Never git commit or push.)`;
+    `- Post the plan summary with T say and wait for the user's "go" before building.\n` +
+    (allowGithub
+      ? `- GITHUB ALLOWED for this run (the user approved it): you may git add/commit, create GitHub repos with \`gh repo create\` and \`git push\` — only what the task asks for. Never force-push, rewrite history, or delete anything on GitHub. Before pushing to a PUBLIC repo, make sure no secrets, tokens, or local absolute paths (e.g. under .claude/) are committed — gitignore .claude/ unless the task says otherwise. Post the resulting repo URL with T say.)`
+      : `- Never git commit or push.)`);
 
   const id = new Date().toISOString().replace(/[:.]/g, "-");
-  const run = { id, project: p.name, dir: p.dir, isNew: p.isNew, task, tCmd, attempts: 1, startedAt: Date.now(), log: path.join(LOG_DIR, `${id}.jsonl`) };
+  const run = { id, project: p.name, dir: p.dir, isNew: p.isNew, task, tCmd, allowGithub, attempts: 1, startedAt: Date.now(), log: path.join(LOG_DIR, `${id}.jsonl`) };
   spawnRun(run, prompt, null);
   return readRun();
 }
@@ -171,7 +186,8 @@ export function startRun({ project, task }, handler) {
 function spawnRun(run, prompt, resumeSessionId) {
   fs.mkdirSync(LOG_DIR, { recursive: true });
   const log = fs.createWriteStream(run.log, { flags: "a" }); // resumed attempts append to the same log
-  const args = ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits", "--strict-mcp-config", "--allowedTools", ...ALLOWED_TOOLS];
+  const allowed = run.allowGithub ? [...ALLOWED_TOOLS, ...GITHUB_TOOLS] : ALLOWED_TOOLS;
+  const args = ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits", "--strict-mcp-config", "--allowedTools", ...allowed, "--disallowedTools", ...DENIED_TOOLS];
   if (resumeSessionId) args.push("--resume", resumeSessionId);
   child = spawn(CLAUDE_BIN, args, { cwd: run.dir, env: claudeEnv({ TEAM_CLI }), windowsHide: true });
   stopping = false;

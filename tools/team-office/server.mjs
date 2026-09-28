@@ -7,7 +7,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { ROOT, STATE_FILE, CHAT_FILE, readState, readChat, updateChat, updateState, setAgent, setModel, configuredModels, summary, claudeEnv } from "./lib.mjs";
 import { readRun, startRun, stopRun, isRunning, resolveProject, recoverRunState } from "./runner.mjs";
@@ -18,6 +18,16 @@ const PUBLIC = path.join(HERE, "public");
 const PORT = Number(process.argv[2] || process.env.PORT || 4400);
 const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
 const REPLY_TIMEOUT_MS = 180000;
+
+// Which GitHub account `gh` is signed in to (shown on publishing proposals and to the manager). Refreshed every 10 min.
+let githubAccount = null;
+function refreshGithubAccount() {
+  execFile("gh", ["api", "user", "--jq", ".login"], { timeout: 15000, windowsHide: true }, (err, out) => {
+    githubAccount = err ? null : String(out).trim() || null;
+  });
+}
+refreshGithubAccount();
+setInterval(refreshGithubAccount, 10 * 60 * 1000).unref();
 
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png" };
 
@@ -62,6 +72,7 @@ function runSnapshot() {
       : "No pipeline run has been started from the office yet.",
     proposal ? `Pending proposal (waiting for the user's confirmation): project "${proposal.project}"${proposal.isNew ? " (new folder)" : ""} — ${proposal.task}` : "No pending proposal.",
     `This repo (Merage Hub, project name "merage-hub"): ${ROOT}`,
+    githubAccount ? `GitHub CLI (gh) is signed in as: ${githubAccount} — runs you mark with ALLOW: github can create repos and push there.` : "GitHub CLI (gh) is not signed in — publishing runs won't work until the user runs `gh auth login`.",
     `Sibling project folders in ${path.resolve(ROOT, "..")}: ${projects.join(", ") || "(none)"}`,
   ].join("\n");
 }
@@ -140,10 +151,12 @@ function parseDirectives(text) {
   let start = false;
   const body = [];
   let inPropose = false; // a PROPOSE brief may continue over several lines, until the next directive
+  let allowGithub = false; // "ALLOW: github" — the proposed run may commit/push (shown on the card; Start = consent)
   for (const line of text.split("\n")) {
-    const m = line.match(/^\s*(RELAY|PROPOSE|START):\s*(.*)$/);
+    const m = line.match(/^\s*(RELAY|PROPOSE|START|ALLOW):\s*(.*)$/);
     if (m) {
       inPropose = false;
+      if (m[1] === "ALLOW" && /github/i.test(m[2])) allowGithub = true;
       if (m[1] === "RELAY" && m[2].trim()) relays.push(m[2].trim());
       if (m[1] === "START") start = true;
       if (m[1] === "PROPOSE") {
@@ -156,6 +169,7 @@ function parseDirectives(text) {
   }
   if (propose) {
     propose.task = propose.task.trim();
+    propose.allowGithub = allowGithub;
     if (!propose.task) propose = null;
   }
   return { body: body.join("\n").trim(), relays, propose, start };
@@ -201,7 +215,7 @@ async function handleChat(text) {
   if (propose) {
     try {
       const p = resolveProject(propose.project);
-      proposal = { id: crypto.randomUUID(), t: Date.now(), project: p.name, dir: p.dir, isNew: p.isNew, task: propose.task };
+      proposal = { id: crypto.randomUUID(), t: Date.now(), project: p.name, dir: p.dir, isNew: p.isNew, task: propose.task, allowGithub: !!propose.allowGithub, githubAccount: githubAccount || null };
     } catch (e) {
       notice = `Couldn't prepare that run: ${e.message}`;
     }
@@ -259,7 +273,7 @@ function onRunEvent(run) {
 function launch(proposal) {
   if (isRunning()) return systemMessage("A run is already in progress or paused until the usage limit resets — stop it (■ in the chat) before starting another.");
   try {
-    startRun({ project: proposal.project, task: proposal.task }, onRunEvent);
+    startRun({ project: proposal.project, task: proposal.task, allowGithub: !!proposal.allowGithub }, onRunEvent);
     updateChat((c) => {
       c.proposal = null;
       c.messages.push(msg("system", `🚀 Run started: ${proposal.task}\nProject folder: ${proposal.dir}${proposal.isNew ? " (new)" : ""}. The team will post the plan here for your go-ahead before building.`));
