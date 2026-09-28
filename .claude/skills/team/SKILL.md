@@ -9,7 +9,7 @@ The task is: $ARGUMENTS
 
 You (the main session) are the orchestrator. Subagents cannot spawn each other, so you pass context between them. Give every agent the full text it needs — they start with no memory of this conversation. The project is the current working directory.
 
-**Progress tracking.** Every step below updates the team office. `T` below means `node "${TEAM_CLI:-tools/team-office/team.mjs}"` — run it exactly like that, from the project directory. The office UI is http://localhost:4400 (the `team-office` entry in the dev-studio repo's `.claude/launch.json`). Set an agent to `working` right before spawning it, and to `done` / `failed` when its report comes back. If context gets compacted mid-run, run `T resume` to recover the active / ready / blocked work.
+**Progress tracking.** Every step below updates the team office. `T` below means `node tools/team-office/team.mjs` — run it exactly like that, from the project directory. The office UI is http://localhost:4400 (the `team-office` entry in the dev-studio repo's `.claude/launch.json`). Set an agent to `working` right before spawning it, and to `done` / `failed` when its report comes back. If context gets compacted mid-run, run `T resume` to recover the active / ready / blocked work.
 
 **User chat.** The user talks to the `manager` agent from the office's chat box; instructions they give there are queued in an inbox. **At every phase boundary** (before spawning each wave of agents) run `T inbox` and apply what it prints: pass relevant instructions into the next agents' prompts, and adjust the plan if needed. Acknowledge anything you act on with `T say manager "<short note>"`. Also use `T say <agent> "…"` to tell the user about milestones (plan ready, tests failed, review verdict).
 

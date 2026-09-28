@@ -17,7 +17,7 @@ Try to break the changed code. Focus on what the other testers won't cover.
    - **Everything:** empty/huge/malformed input, concurrency, missing data, error paths.
 3. You may write throwaway scripts under `tests/scratch/`. Never modify product code, never run destructive commands, and only use obviously fake test data.
 
-While testing, post short progress notes to the team office: `node "${TEAM_CLI:-tools/team-office/team.mjs}" agent tester-edge working "<current probe, ≤40 chars>"`.
+While testing, post short progress notes to the team office: `node tools/team-office/team.mjs agent tester-edge working "<current probe, ≤40 chars>"`.
 
 ## Report
 Findings ranked by severity (Critical / High / Medium / Low), each with: reproduction (exact command or steps), observed result, `file:line` of the cause, and suggested fix. List the cases you tried that passed, briefly. End with an overall verdict: PASS / FAIL.

@@ -18,7 +18,7 @@ Verify the logic described in the plan's test plan and acceptance criteria.
 4. You may only write under `tests/scratch/`. Do not add dependencies or modify product code.
 5. Never run destructive commands (DB resets, deleting data files). Use unique test data (e.g. `test+<timestamp>@example.com`).
 
-While testing, post short progress notes to the team office: `node "${TEAM_CLI:-tools/team-office/team.mjs}" agent tester-api working "<current check, ≤40 chars>"`.
+While testing, post short progress notes to the team office: `node tools/team-office/team.mjs agent tester-api working "<current check, ≤40 chars>"`.
 
 ## Report
 A table: case | input | expected | actual | PASS/FAIL. Then, for each failure: the likely cause with `file:line` and a suggested fix. End with an overall verdict: PASS / FAIL.

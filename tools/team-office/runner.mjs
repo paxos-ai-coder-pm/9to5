@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
-import { ROOT, DIR, updateState, setModel } from "./lib.mjs";
+import { ROOT, DIR, updateState, setModel, readState } from "./lib.mjs";
 import { createStreamParser } from "./stream.mjs";
 
 const RUN_FILE = path.join(DIR, "run.json");
@@ -11,6 +11,8 @@ const LOG_DIR = path.join(DIR, "runs");
 const TEAM_CLI = path.join(ROOT, "tools", "team-office", "team.mjs");
 const PROJECTS_ROOT = path.resolve(ROOT, "..");
 const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
+// how every agent calls the office CLI from any project folder (forward slashes work in Git Bash and cmd)
+const T_CMD = `node "${TEAM_CLI.replaceAll("\\", "/")}"`;
 
 // What an unattended run may do: edit files inside the project folder (acceptEdits is scoped to the working
 // directory) and run project tooling. No git commit/push, no deletes.
@@ -18,7 +20,7 @@ const ALLOWED_TOOLS = [
   "Read", "Glob", "Grep", "Edit", "Write", "Agent", "Task", "TodoWrite", "WebFetch", "WebSearch", "Skill",
   "Bash(node:*)", "Bash(npm:*)", "Bash(npx:*)", "Bash(curl:*)", "Bash(sleep:*)",
   "Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git ls-files:*)", "Bash(git init:*)", "Bash(git add:*)",
-  "Bash(ls:*)", "Bash(mkdir:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(wc:*)", "Bash(grep:*)", "Bash(find:*)", "Bash(pwd)",
+  "Bash(cd:*)", "Bash(ls:*)", "Bash(mkdir:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(wc:*)", "Bash(grep:*)", "Bash(find:*)", "Bash(pwd)",
 ];
 
 let child = null;
@@ -58,18 +60,16 @@ function prepareProject(p) {
   fs.mkdirSync(p.dir, { recursive: true });
   if (p.dir === ROOT) return;
   if (!fs.existsSync(path.join(p.dir, ".git"))) execFileSync("git", ["init", "-q"], { cwd: p.dir });
-  // seed the team's playbook so the pipeline works the same in every project
-  const agentsDir = path.join(p.dir, ".claude", "agents");
-  fs.mkdirSync(agentsDir, { recursive: true });
+  // Seed (and refresh) the team's playbook so the pipeline works the same in every project. The office CLI lives
+  // in this repo, so its relative path is rewritten to an absolute one (env-var paths get blocked in headless runs).
+  const seed = (from, to) => {
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.writeFileSync(to, fs.readFileSync(from, "utf8").replaceAll("node tools/team-office/team.mjs", T_CMD));
+  };
   for (const f of fs.readdirSync(path.join(ROOT, ".claude", "agents"))) {
-    if (f === "manager.md" || fs.existsSync(path.join(agentsDir, f))) continue;
-    fs.copyFileSync(path.join(ROOT, ".claude", "agents", f), path.join(agentsDir, f));
+    if (f !== "manager.md") seed(path.join(ROOT, ".claude", "agents", f), path.join(p.dir, ".claude", "agents", f));
   }
-  const skillDir = path.join(p.dir, ".claude", "skills", "team");
-  if (!fs.existsSync(path.join(skillDir, "SKILL.md"))) {
-    fs.mkdirSync(skillDir, { recursive: true });
-    fs.copyFileSync(path.join(ROOT, ".claude", "skills", "team", "SKILL.md"), path.join(skillDir, "SKILL.md"));
-  }
+  seed(path.join(ROOT, ".claude", "skills", "team", "SKILL.md"), path.join(p.dir, ".claude", "skills", "team", "SKILL.md"));
   const gi = path.join(p.dir, ".gitignore");
   const cur = fs.existsSync(gi) ? fs.readFileSync(gi, "utf8") : "";
   if (!cur.includes(".claude/team/")) fs.appendFileSync(gi, `${cur && !cur.endsWith("\n") ? "\n" : ""}# team run state\n.claude/team/\ntests/scratch/\n`);
@@ -90,11 +90,13 @@ export function startRun({ project, task }, onEnd) {
   const p = resolveProject(project);
   prepareProject(p);
 
+  const tCmd = p.dir === ROOT ? "node tools/team-office/team.mjs" : T_CMD;
   const prompt =
     `/team ${task}\n\n` +
-    `(HEADLESS: launched from the team office after the user confirmed in chat. The user is not watching this terminal — follow the skill's Headless mode rules. ` +
-    `Project directory: ${p.dir}${p.isNew ? " — a new, empty project: scaffold it here" : ""}. ` +
-    `Post the plan summary with T say and wait for the user's "go" before building. Never git commit or push.)`;
+    `(HEADLESS: launched from the team office after the user confirmed in chat. The user is not watching this terminal — follow the skill's Headless mode rules.\n` +
+    `- Project directory: ${p.dir}${p.isNew ? " — a new, empty project: scaffold it here" : ""}.\n` +
+    `- The team office CLI ("T" in the skill) is exactly: ${tCmd} — it lives outside this project; don't look for it. Your first command must be: ${tCmd} init "<one-line task summary>"\n` +
+    `- Post the plan summary with T say and wait for the user's "go" before building. Never git commit or push.)`;
 
   const id = new Date().toISOString().replace(/[:.]/g, "-");
   fs.mkdirSync(LOG_DIR, { recursive: true });
@@ -129,8 +131,19 @@ export function startRun({ project, task }, onEnd) {
     child = null;
     log.end();
     lastResult = parser.end();
-    const status = stopping ? "stopped" : err || code !== 0 || lastResult?.is_error ? "failed" : "finished";
-    const done = { ...run, status, endedAt: Date.now(), exitCode: code, error: err || (lastResult?.is_error ? String(lastResult.result).slice(0, 300) : undefined) };
+    // A clean exit isn't success if the lead never actually started the pipeline (no `T init` during this run).
+    const s = readState();
+    const pipelineStarted = !!s.task && s.startedAt >= run.startedAt;
+    let status = stopping ? "stopped" : err || code !== 0 || lastResult?.is_error ? "failed" : "finished";
+    if (status === "finished" && !pipelineStarted) {
+      status = "failed";
+      err = "The team lead ended without starting the pipeline.";
+    }
+    const done = {
+      ...run, status, endedAt: Date.now(), exitCode: code,
+      error: err || (lastResult?.is_error ? String(lastResult.result).slice(0, 300) : undefined),
+      summary: lastResult?.result ? String(lastResult.result).slice(0, 1500) : undefined, // the lead's final words
+    };
     writeRun(done);
     onEnd?.(done);
   };

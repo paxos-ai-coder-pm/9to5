@@ -21,7 +21,7 @@ Stack notes:
 - Don't write tests — the testers do that.
 
 ## Progress tracking
-Report progress so it shows in the team office. `T` below means `node "${TEAM_CLI:-tools/team-office/team.mjs}"` (run it exactly like that, from the project directory):
+Report progress so it shows in the team office. `T` below means `node tools/team-office/team.mjs` (run it exactly like that, from the project directory):
 - Starting a task from the execution graph: `T task <id> start` and `T agent dev-2 working "<what you're doing, ≤40 chars>"`
 - Finished a task: `T task <id> verify` (runs its verify commands; marks it done or blocked). If it has no verify commands, use `T task <id> done`.
 - Stuck: `T task <id> block "<reason>"`

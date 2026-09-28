@@ -123,22 +123,27 @@ function parseDirectives(text) {
   const relays = [];
   let propose = null;
   let start = false;
-  const body = text
-    .split("\n")
-    .filter((line) => {
-      const m = line.match(/^\s*(RELAY|PROPOSE|START):\s*(.*)$/);
-      if (!m) return true;
+  const body = [];
+  let inPropose = false; // a PROPOSE brief may continue over several lines, until the next directive
+  for (const line of text.split("\n")) {
+    const m = line.match(/^\s*(RELAY|PROPOSE|START):\s*(.*)$/);
+    if (m) {
+      inPropose = false;
       if (m[1] === "RELAY" && m[2].trim()) relays.push(m[2].trim());
+      if (m[1] === "START") start = true;
       if (m[1] === "PROPOSE") {
         const [project, ...rest] = m[2].split("|");
-        if (rest.length && rest.join("|").trim()) propose = { project: project.trim(), task: rest.join("|").trim() };
+        propose = { project: project.trim(), task: rest.join("|").trim() };
+        inPropose = true;
       }
-      if (m[1] === "START") start = true;
-      return false;
-    })
-    .join("\n")
-    .trim();
-  return { body, relays, propose, start };
+    } else if (inPropose) propose.task += "\n" + line;
+    else body.push(line);
+  }
+  if (propose) {
+    propose.task = propose.task.trim();
+    if (!propose.task) propose = null;
+  }
+  return { body: body.join("\n").trim(), relays, propose, start };
 }
 
 async function handleChat(text) {
@@ -213,12 +218,13 @@ function launch(proposal) {
   if (isRunning()) return systemMessage("A run is already in progress — stop it (■ in the chat) before starting another.");
   try {
     startRun({ project: proposal.project, task: proposal.task }, (run) => {
+      const title = run.task.split("\n")[0].slice(0, 120);
       const how = {
-        finished: `✅ Run finished — ${run.task}. Files are in ${run.dir}.`,
-        stopped: `■ Run stopped — ${run.task}.`,
-        failed: `⚠️ Run failed — ${run.task}.${run.error ? ` ${run.error}` : ""} Log: ${run.log}`,
+        finished: `✅ Run finished — ${title}. Files are in ${run.dir}.`,
+        stopped: `■ Run stopped — ${title}.`,
+        failed: `⚠️ Run failed — ${title}.${run.error ? ` ${run.error}` : ""}`,
       }[run.status];
-      systemMessage(how);
+      systemMessage(how + (run.summary && run.status !== "stopped" ? `\n\nTeam lead's last words:\n${run.summary}` : "") + (run.status === "failed" ? `\n\nFull log: ${run.log}` : ""));
       updateState((s) => setAgent(s, "manager", "waiting", `Run ${run.status}`));
     });
     updateChat((c) => {
