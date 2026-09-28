@@ -102,6 +102,22 @@ export function setAgent(state, name, st, activity = "") {
   event(state, { type: "state", agent: name, state: st, msg: activity || st });
 }
 
+// Environment for spawning the Claude CLI. Drops CLAUDECODE (lets it run from inside a Claude Code session) and,
+// when requests go to Anthropic, stale non-Claude model overrides inherited from a parent process (e.g. an old
+// MiniMax setup) — those would make the CLI request a model Anthropic doesn't serve.
+export function claudeEnv(extra = {}) {
+  const env = { ...process.env, ...extra };
+  delete env.CLAUDECODE;
+  const anthropic = !env.ANTHROPIC_BASE_URL || /api\.anthropic\.com/.test(env.ANTHROPIC_BASE_URL);
+  if (anthropic) {
+    if (env.ANTHROPIC_BASE_URL) delete env.ANTHROPIC_BASE_URL;
+    for (const k of ["ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_SMALL_FAST_MODEL"]) {
+      if (env[k] && !/claude|opus|sonnet|haiku|fable/i.test(env[k])) delete env[k];
+    }
+  }
+  return env;
+}
+
 // Record the model an agent actually ran on ("lead" = the orchestrating session). Returns true if it changed.
 export function setModel(state, agent, model) {
   if (!model || state.models?.[agent] === model) return false;

@@ -9,7 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { ROOT, STATE_FILE, CHAT_FILE, readState, readChat, updateChat, updateState, setAgent, setModel, configuredModels, summary } from "./lib.mjs";
+import { ROOT, STATE_FILE, CHAT_FILE, readState, readChat, updateChat, updateState, setAgent, setModel, configuredModels, summary, claudeEnv } from "./lib.mjs";
 import { readRun, startRun, stopRun, isRunning, resolveProject, recoverRunState } from "./runner.mjs";
 import { createStreamParser } from "./stream.mjs";
 
@@ -75,8 +75,7 @@ function askManager(text, sessionId) {
   // stream-json + partial messages → we see the reply token by token and can show it while it's being written
   const args = ["-p", "--agent", "manager", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--strict-mcp-config", "--permission-mode", "dontAsk"];
   if (sessionId) args.push("--resume", sessionId);
-  const env = { ...process.env };
-  delete env.CLAUDECODE; // let the CLI run even if this server was launched from inside a Claude Code session
+  const env = claudeEnv();
 
   return new Promise((resolve) => {
     let err = "";

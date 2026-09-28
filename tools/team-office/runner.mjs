@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
-import { ROOT, DIR, updateState, setModel, readState } from "./lib.mjs";
+import { ROOT, DIR, updateState, setModel, readState, claudeEnv } from "./lib.mjs";
 import { createStreamParser } from "./stream.mjs";
 
 const RUN_FILE = path.join(DIR, "run.json");
@@ -103,8 +103,7 @@ export function startRun({ project, task }, onEnd) {
   const logFile = path.join(LOG_DIR, `${id}.jsonl`);
   const log = fs.createWriteStream(logFile);
 
-  const env = { ...process.env, TEAM_CLI };
-  delete env.CLAUDECODE;
+  const env = claudeEnv({ TEAM_CLI });
   const args = ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits", "--strict-mcp-config", "--allowedTools", ...ALLOWED_TOOLS];
   child = spawn(CLAUDE_BIN, args, { cwd: p.dir, env, windowsHide: true });
   stopping = false;

@@ -50,6 +50,10 @@ The execution graph uses [AmnesiaGraph](https://github.com/turio/AmnesiaGraph)'s
    ```
 4. Restart Claude Code, then run `/team <what you want built>`.
 
+**Quick launcher (Windows):** run `bin/devstudio.cmd` from the repo, or copy `bin/devstudio.cmd` and `bin/devstudio` into a folder on your PATH (e.g. `~/.local/bin`) and change `STUDIO` in the .cmd from `%~dp0..` to this repo's full path. Then `devstudio` starts the office and opens it, `devstudio stop` stops it, `devstudio status` checks it.
+
+The office calls the `claude` CLI, so it must be signed in (`claude` → `/login`). It strips stale non-Claude model overrides from its environment when talking to Anthropic.
+
 Requires Node 18+. Manager chat shells out to the `claude` CLI (`claude -p --agent manager`), so the CLI must be installed and logged in for the environment the server runs in; set `CLAUDE_BIN` to point at a specific binary.
 
 ## Progress CLI
