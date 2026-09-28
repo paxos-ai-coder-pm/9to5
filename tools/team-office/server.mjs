@@ -16,6 +16,7 @@ const PUBLIC = path.join(HERE, "public");
 const PORT = Number(process.argv[2] || process.env.PORT || 4400);
 const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
 const REPLY_TIMEOUT_MS = 180000;
+let speaker = null; // id of the browser tab that should speak replies
 
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png" };
 
@@ -105,17 +106,21 @@ function splitRelays(text) {
   return { body, relays };
 }
 
-async function handleChat(text) {
+async function handleChat(text, lang = "en") {
   const sessionId = updateChat((c) => {
     c.messages.push(msg("user", text));
     c.busy = true;
     return c.sessionId;
   });
-  updateState((s) => setAgent(s, "manager", "working", "Replying to you"));
+  updateState((s) => setAgent(s, "manager", "working", lang === "hi" ? "आपको जवाब दे रहा हूँ" : "Replying to you"));
 
-  let r = await askManager(text, sessionId);
+  const prompt =
+    lang === "hi"
+      ? `${text}\n\n(The user has chosen Hindi. Reply in Hindi, written entirely in Devanagari script — see "Speaking Hindi" in your instructions.)`
+      : text;
+  let r = await askManager(prompt, sessionId);
   // A stale/unknown session id: retry once as a fresh conversation.
-  if (r.error && sessionId && /session|conversation/i.test(r.error)) r = await askManager(text, null);
+  if (r.error && sessionId && /session|conversation/i.test(r.error)) r = await askManager(prompt, null);
 
   if (r.error) {
     const loginHint = /log ?in|auth|401/i.test(r.error)
@@ -155,28 +160,42 @@ http
     }
 
     if (url.pathname === "/api/chat" && req.method === "GET") {
-      let body = null;
+      let chat = { messages: [], inbox: [], busy: false };
       try {
-        body = fs.readFileSync(CHAT_FILE, "utf8");
+        chat = JSON.parse(fs.readFileSync(CHAT_FILE, "utf8"));
       } catch {}
-      return send(res, 200, body || JSON.stringify({ messages: [], inbox: [], busy: false }));
+      return send(res, 200, { ...chat, speaker });
+    }
+
+    // Only accept same-origin JSON posts, so other websites can't drive the manager.
+    const sameOriginJson = () => {
+      const origin = req.headers.origin;
+      return !(origin && new URL(origin).host !== req.headers.host) && String(req.headers["content-type"]).startsWith("application/json");
+    };
+
+    // The tab you interacted with last is the only one that speaks (avoids two voices from two open tabs).
+    if (url.pathname === "/api/speaker" && req.method === "POST") {
+      if (!sameOriginJson()) return send(res, 403, { error: "forbidden" });
+      try {
+        const id = String(JSON.parse(await readBody(req, 512)).id || "");
+        if (/^[\w-]{8,64}$/.test(id)) speaker = id;
+      } catch {}
+      return send(res, 200, { speaker });
     }
 
     if (url.pathname === "/api/chat" && req.method === "POST") {
-      // Only accept same-origin JSON posts, so other websites can't drive the manager.
-      const origin = req.headers.origin;
-      if ((origin && new URL(origin).host !== req.headers.host) || !String(req.headers["content-type"]).startsWith("application/json")) {
-        return send(res, 403, { error: "forbidden" });
-      }
-      let text;
+      if (!sameOriginJson()) return send(res, 403, { error: "forbidden" });
+      let text, lang;
       try {
-        text = String(JSON.parse(await readBody(req)).text || "").trim();
+        const body = JSON.parse(await readBody(req));
+        text = String(body.text || "").trim();
+        lang = body.lang === "hi" ? "hi" : "en";
       } catch {
         return send(res, 400, { error: "bad request" });
       }
       if (!text || text.length > 4000) return send(res, 400, { error: "Message must be 1–4000 characters." });
       if (readChat().busy) return send(res, 409, { error: "The manager is still replying — one moment." });
-      handleChat(text).catch((e) => {
+      handleChat(text, lang).catch((e) => {
         updateChat((c) => {
           c.busy = false;
           c.messages.push(msg("system", `Chat error: ${e.message}`));

@@ -21,6 +21,11 @@ export function createChat({ onSpeaking } = {}) {
   const neuralOk = "Worker" in window && "AudioContext" in window && typeof WebAssembly === "object";
   const tts = webSpeech || neuralOk;
   let voiceId = localStorage.getItem("managerVoiceId") || "hm_omega";
+  let lang = localStorage.getItem("chatLang") || "en"; // "en" | "hi"
+  const TEXT = {
+    en: { placeholder: "Message the manager…", suggest: ["What's the status?", "Anything blocked?", "Who's working on what?"], mic: "en-IN" },
+    hi: { placeholder: "मैनेजर को संदेश लिखें… (या 🎤 दबाकर बोलें)", suggest: ["काम कहाँ तक पहुँचा?", "कुछ अटका हुआ है?", "कौन क्या कर रहा है?"], mic: "hi-IN" },
+  };
 
   function setOpen(v) {
     open = v;
@@ -64,31 +69,63 @@ export function createChat({ onSpeaking } = {}) {
     status.className = "chat-status" + (chat.busy || speaking ? " busy" : lastError ? " off" : "");
   }
 
+  // ---- one speaker across tabs/browsers: the server remembers which tab you used last ----
+  const tabId = crypto.randomUUID();
+  let speakerTab = null;
+  function claimSpeaker() {
+    if (speakerTab === tabId) return;
+    speakerTab = tabId;
+    fetch("/api/speaker", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: tabId }) }).catch(() => {});
+  }
+  const isSpeakerTab = () => (speakerTab ? speakerTab === tabId : document.visibilityState === "visible");
+  window.addEventListener("pointerdown", claimSpeaker, true);
+  window.addEventListener("keydown", claimSpeaker, true);
+
+  const seen = new Set(); // message ids already handled — each message is spoken at most once
+  let primed = false;
+  let polling = false;
+  let pollAgain = false;
   async function poll() {
+    if (polling) return void (pollAgain = true);
+    polling = true;
     try {
       const res = await fetch("/api/chat", { cache: "no-store" });
       const next = await res.json();
       lastError = "";
-      const count = (next.messages || []).length;
-      const changed = count !== lastCount || next.busy !== chat.busy;
-      if (lastCount >= 0 && count > lastCount) {
-        const fresh = next.messages.slice(lastCount).filter((m) => m.from !== "user");
-        if (!open) {
-          unread += fresh.length;
+      if (next.speaker && next.speaker !== speakerTab) {
+        speakerTab = next.speaker;
+        if (speakerTab !== tabId) stopSpeaking(); // you moved to another tab/browser
+      }
+      const msgs = next.messages || [];
+      const fresh = msgs.filter((m) => m.id && !seen.has(m.id));
+      fresh.forEach((m) => seen.add(m.id));
+      if (primed && fresh.length) {
+        const incoming = fresh.filter((m) => m.from !== "user");
+        if (!open && incoming.length) {
+          unread += incoming.length;
           badge.textContent = unread;
           badge.hidden = !unread;
         }
-        const spoken = fresh.filter((m) => m.from !== "system");
-        if (speak || (voiceTurn && spoken.some((m) => m.from === "manager"))) spoken.forEach((m) => say(m.text, m.from));
-        if (spoken.some((m) => m.from === "manager")) voiceTurn = false;
+        const spoken = incoming.filter((m) => m.from !== "system");
+        const managerReplied = spoken.some((m) => m.from === "manager");
+        if (isSpeakerTab() && (speak || (voiceTurn && managerReplied))) spoken.forEach((m) => say(m.text, m.from));
+        if (managerReplied) voiceTurn = false;
       }
+      primed = true;
+      const changed = msgs.length !== lastCount || next.busy !== chat.busy || fresh.length > 0;
       chat = next;
-      lastCount = count;
+      lastCount = msgs.length;
       if (changed) render();
     } catch {
       if (!lastError) {
         lastError = "Can't reach the office server.";
         render();
+      }
+    } finally {
+      polling = false;
+      if (pollAgain) {
+        pollAgain = false;
+        poll();
       }
     }
   }
@@ -97,13 +134,14 @@ export function createChat({ onSpeaking } = {}) {
     text = text.trim();
     if (!text || chat.busy) return;
     voiceTurn = byVoice;
+    claimSpeaker();
     stopSpeaking();
     input.value = "";
     autosize();
     chat = { ...chat, busy: true, messages: [...(chat.messages || []), { from: "user", text }] };
     render();
     try {
-      const res = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
+      const res = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, lang }) });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
         lastError = e.error || `Send failed (${res.status})`;
@@ -111,7 +149,6 @@ export function createChat({ onSpeaking } = {}) {
     } catch {
       lastError = "Can't reach the office server.";
     }
-    lastCount = -1; // force a full refresh from the server
     poll();
   }
 
@@ -146,7 +183,7 @@ export function createChat({ onSpeaking } = {}) {
       if (rec) return rec.stop();
       stopSpeaking(); // don't let the manager's voice leak into the mic
       rec = new SR();
-      rec.lang = navigator.language || "en-US";
+      rec.lang = TEXT[lang].mic;
       rec.interimResults = true;
       rec.continuous = false;
       const before = input.value ? input.value.trimEnd() + " " : "";
@@ -199,7 +236,7 @@ export function createChat({ onSpeaking } = {}) {
       .replace(/[`*_#>|]/g, "")
       .replace(/\s+/g, " ")
       .trim();
-    const parts = clean.match(/[^.!?]+[.!?]*\s*/g) || [clean];
+    const parts = clean.match(/[^.!?।]+[.!?।]*\s*/g) || [clean];
     const out = [];
     for (const p of parts) {
       if (out.length && (out[out.length - 1] + p).length < 160) out[out.length - 1] += p;
@@ -319,6 +356,29 @@ export function createChat({ onSpeaking } = {}) {
     say("Hi, this is how I'll sound from now on.");
   });
   renderVoiceStatus();
+
+  // language: English / Hindi (mic language, placeholder, suggestions, and the manager's reply language)
+  const langSel = $("langSel");
+  function applyLang() {
+    langSel.value = lang;
+    input.placeholder = TEXT[lang].placeholder;
+    $("chatSuggest").innerHTML = TEXT[lang].suggest.map((s) => `<button>${esc(s)}</button>`).join("");
+  }
+  langSel.addEventListener("change", () => {
+    lang = langSel.value;
+    localStorage.setItem("chatLang", lang);
+    applyLang();
+    // Hindi needs a Hindi voice
+    if (lang === "hi" && !/^h[fm]_/.test(voiceId) && neuralOk) {
+      voiceId = "hm_omega";
+      sel.value = voiceId;
+      localStorage.setItem("managerVoiceId", voiceId);
+      renderVoiceStatus();
+    }
+    stopSpeaking();
+    say(lang === "hi" ? "ठीक है, अब हम हिंदी में बात करेंगे।" : "Okay, switching back to English.");
+  });
+  applyLang();
   // start fetching the model in the background so the first reply isn't delayed
   if (speak && voiceId !== "system" && neuralOk) neural.load();
 

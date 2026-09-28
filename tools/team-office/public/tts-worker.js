@@ -1,5 +1,7 @@
 // Neural text-to-speech worker: Kokoro-82M (Apache-2.0) via kokoro-js / Transformers.js, running on-device.
 // The model downloads once from Hugging Face and is cached by the browser (Cache Storage).
+import { hasDevanagari, hindiToIPA } from "./hindi-g2p.js";
+
 const KOKORO_JS = "https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js";
 const MODEL = "onnx-community/Kokoro-82M-v1.0-ONNX";
 
@@ -39,7 +41,13 @@ self.onmessage = (e) => {
     chain = chain.then(async () => {
       if (!tts || m.gen < liveGen) return postMessage({ type: "skipped", id: m.id, gen: m.gen });
       try {
-        const out = await tts.generate(m.text, { voice: m.voice, speed: m.speed || 1 });
+        let out;
+        if (hasDevanagari(m.text)) {
+          // Hindi: our own G2P → phoneme ids → Kokoro, always with a Hindi voice
+          const voice = /^h[fm]_/.test(m.voice) ? m.voice : "hm_omega";
+          const { input_ids } = tts.tokenizer(hindiToIPA(m.text), { truncation: true });
+          out = await tts.generate_from_ids(input_ids, { voice, speed: m.speed || 1 });
+        } else out = await tts.generate(m.text, { voice: m.voice, speed: m.speed || 1 });
         const audio = out.audio;
         postMessage({ type: "audio", id: m.id, gen: m.gen, sr: out.sampling_rate, audio }, [audio.buffer]);
       } catch (err) {
