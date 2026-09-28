@@ -240,6 +240,10 @@ body { padding-bottom: 20px; }
 .icon-btn[aria-pressed="true"] { background: var(--warning); box-shadow: none; }
 .icon-btn.mic[aria-pressed="true"] { background: #d03b3b; animation: blink 1s steps(2) infinite; }
 .icon-btn:disabled { opacity: .35; cursor: not-allowed; }
+.voice-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border-bottom: 3px solid var(--border); font-size: 16px; }
+.voice-row label { font-family: var(--px); font-size: 8px; color: var(--text-muted); }
+.voice-row select { font-family: var(--mono); font-size: 17px; background: #0a0a0a; color: var(--text-primary); border: 0; padding: 2px 4px; box-shadow: inset 0 0 0 2px var(--border); }
+.voice-status { color: var(--text-muted); flex-basis: 100%; }
 .chat-log { list-style: none; margin: 0; padding: 14px 12px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 .chat-log li { max-width: 88%; display: flex; flex-direction: column; gap: 3px; }
 .chat-log .from { font-family: var(--px); font-size: 8px; color: var(--text-muted); display: flex; align-items: center; gap: 5px; }

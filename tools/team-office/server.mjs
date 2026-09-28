@@ -19,8 +19,12 @@ const REPLY_TIMEOUT_MS = 180000;
 
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png" };
 
+// Cross-origin isolation lets the in-browser voice model (ONNX Runtime WASM) use multiple threads — ~4× faster.
+// "credentialless" keeps CDN/Hugging Face/Google Fonts loads working without them sending CORP headers.
+const ISOLATION = { "cross-origin-opener-policy": "same-origin", "cross-origin-embedder-policy": "credentialless" };
+
 function send(res, code, body, type = "application/json") {
-  res.writeHead(code, { "content-type": type, "cache-control": "no-store" });
+  res.writeHead(code, { "content-type": type, "cache-control": "no-store", ...ISOLATION });
   res.end(typeof body === "string" ? body : JSON.stringify(body));
 }
 
@@ -185,7 +189,7 @@ http
     if (!file.startsWith(PUBLIC)) return send(res, 403, "", "text/plain");
     fs.readFile(file, (err, data) => {
       if (err) return send(res, 404, "Not found", "text/plain");
-      res.writeHead(200, { "content-type": TYPES[path.extname(file)] || "application/octet-stream", "cache-control": "no-store" });
+      res.writeHead(200, { "content-type": TYPES[path.extname(file)] || "application/octet-stream", "cache-control": "no-store", ...ISOLATION });
       res.end(data);
     });
   })

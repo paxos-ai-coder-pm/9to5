@@ -1,5 +1,6 @@
 // Chat dock: talk to the manager by text or voice. Messages persist in .claude/team/chat.json via the server.
 import { AGENT_BY_ID, esc } from "./agents.js";
+import { VOICES, createNeuralVoice } from "./voice.js";
 
 export function createChat({ onSpeaking } = {}) {
   const $ = (id) => document.getElementById(id);
@@ -16,7 +17,10 @@ export function createChat({ onSpeaking } = {}) {
   let voiceTurn = false; // you spoke → the manager always answers out loud
   let speaking = false;
   let lastError = "";
-  const tts = "speechSynthesis" in window;
+  const webSpeech = "speechSynthesis" in window;
+  const neuralOk = "Worker" in window && "AudioContext" in window && typeof WebAssembly === "object";
+  const tts = webSpeech || neuralOk;
+  let voiceId = localStorage.getItem("managerVoiceId") || "hm_omega";
 
   function setOpen(v) {
     open = v;
@@ -198,10 +202,16 @@ export function createChat({ onSpeaking } = {}) {
     const parts = clean.match(/[^.!?]+[.!?]*\s*/g) || [clean];
     const out = [];
     for (const p of parts) {
-      if (out.length && (out[out.length - 1] + p).length < 180) out[out.length - 1] += p;
+      if (out.length && (out[out.length - 1] + p).length < 160) out[out.length - 1] += p;
       else out.push(p);
     }
-    return out.filter((s) => s.trim());
+    // Keep the first chunk short so the neural voice starts talking quickly; the rest renders while it plays.
+    if (out[0] && out[0].length > 70) {
+      const cut = out[0].slice(0, 70).search(/[,;:—–-]\s[^,;:—–-]*$/);
+      const at = cut > 20 ? cut + 1 : out[0].lastIndexOf(" ", 60);
+      if (at > 20) out.splice(0, 1, out[0].slice(0, at), out[0].slice(at));
+    }
+    return out.map((s) => s.trim()).filter(Boolean);
   }
 
   let pending = 0;
@@ -211,17 +221,44 @@ export function createChat({ onSpeaking } = {}) {
     renderStatus();
     onSpeaking?.(v, text);
   }
+
+  // Neural voice (Kokoro, on-device) with the system voice as fallback.
+  const neural = createNeuralVoice({
+    onStatus: (s) => {
+      voiceState = s;
+      renderVoiceStatus();
+    },
+    onSpeaking: (v, text) => setSpeakingState(v, text),
+  });
+  let voiceState = { state: "idle" };
+  function renderVoiceStatus() {
+    const s = voiceState;
+    const el = $("voiceStatus");
+    if (voiceId === "system") el.textContent = webSpeech ? "built-in browser voice" : "not supported here";
+    else if (s.state === "loading") el.textContent = s.mb ? `downloading voice model… ${s.pct}% of ${s.mb} MB` : "loading voice model…";
+    else if (s.state === "ready") el.textContent = "on-device neural voice ✓";
+    else if (s.state === "failed") el.textContent = "neural voice unavailable — using system voice";
+    else el.textContent = "neural voice (loads on first use)";
+    el.title = s.error || "";
+  }
   function say(text, from = "manager") {
-    if (!tts) return;
+    const spoken = from === "manager" ? text : `${from} says: ${text}`;
+    const parts = chunks(spoken);
+    if (!parts.length) return;
+    if (voiceId !== "system" && neuralOk) neural.speak(parts, text, voiceId, (t) => systemSay(t));
+    else systemSay(spoken, text);
+  }
+  function systemSay(spoken, display = spoken) {
+    if (!webSpeech) return;
     if (!voice) pickVoice();
-    const parts = chunks(from === "manager" ? text : `${from} says: ${text}`);
+    const parts = chunks(spoken);
     parts.forEach((part, i) => {
       const u = new SpeechSynthesisUtterance(part);
       if (voice) u.voice = voice;
       u.lang = voice?.lang || navigator.language || "en-US";
       u.rate = 1.03;
       pending++;
-      if (i === 0) u.onstart = () => setSpeakingState(true, text);
+      if (i === 0) u.onstart = () => setSpeakingState(true, display);
       u.onend = u.onerror = () => {
         pending = Math.max(0, pending - 1);
         if (!pending) setSpeakingState(false);
@@ -230,9 +267,9 @@ export function createChat({ onSpeaking } = {}) {
     });
   }
   function stopSpeaking() {
-    if (!tts) return;
+    neural.stop();
     pending = 0;
-    speechSynthesis.cancel();
+    if (webSpeech) speechSynthesis.cancel();
     setSpeakingState(false);
   }
 
@@ -244,10 +281,17 @@ export function createChat({ onSpeaking } = {}) {
     speakBtn.title = v ? "Manager speaks replies (click to mute)" : "Manager is muted (click to let them speak)";
     if (!v) stopSpeaking();
   }
-  if (tts) {
+  if (webSpeech) {
     pickVoice();
     speechSynthesis.addEventListener?.("voiceschanged", pickVoice);
-  } else speakBtn.hidden = true;
+  }
+  if (!tts) {
+    speakBtn.hidden = true;
+    $("voiceRow").hidden = true;
+  }
+  // Browsers only allow audio after a user gesture, so unlock on any click/keypress in the chat.
+  box.addEventListener("pointerdown", () => neural.unlock());
+  box.addEventListener("keydown", () => neural.unlock());
   // While talking, the speaker button stops the current speech; otherwise it toggles mute.
   speakBtn.addEventListener("click", () => (speaking ? stopSpeaking() : setSpeak(!speak)));
   log.addEventListener("click", (e) => {
@@ -259,6 +303,24 @@ export function createChat({ onSpeaking } = {}) {
       say(m.text, m.from);
     }
   });
+
+  // voice picker
+  const sel = $("voiceSel");
+  sel.innerHTML = VOICES.filter((v) => (v.id === "system" ? webSpeech : neuralOk))
+    .map((v) => `<option value="${v.id}">${esc(v.label)}</option>`)
+    .join("");
+  if (![...sel.options].some((o) => o.value === voiceId)) voiceId = sel.options[0]?.value || "system";
+  sel.value = voiceId;
+  sel.addEventListener("change", () => {
+    voiceId = sel.value;
+    localStorage.setItem("managerVoiceId", voiceId);
+    stopSpeaking();
+    renderVoiceStatus();
+    say("Hi, this is how I'll sound from now on.");
+  });
+  renderVoiceStatus();
+  // start fetching the model in the background so the first reply isn't delayed
+  if (speak && voiceId !== "system" && neuralOk) neural.load();
 
   $("chatMin").addEventListener("click", () => setOpen(false));
   fab.addEventListener("click", () => setOpen(true));
