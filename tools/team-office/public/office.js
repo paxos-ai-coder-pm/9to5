@@ -1,5 +1,5 @@
 // 8-bit office renderer. Everything is drawn procedurally at 384×216 and scaled up with pixelated rendering.
-import { AGENTS, AGENT_BY_ID, AGENT_STATE, taskStatus, fmtDur, esc } from "./agents.js";
+import { AGENTS, AGENT_BY_ID, AGENT_STATE, taskStatus, fmtDur, esc, modelFor } from "./agents.js";
 
 const W = 384;
 const H = 216;
@@ -508,6 +508,7 @@ export function createOffice({ canvas, overlay, tip, onSelect }) {
       (ag.since ? ` <span class="muted">· ${fmtDur(now - ag.since)}</span>` : "") +
       (ag.activity ? `<br><span class="muted">${esc(ag.activity)}</span>` : "") +
       (owned.length ? `<br>Tasks: ${doneN}/${owned.length} done` : "") +
+      (modelFor(state, id) ? `<br><span class="muted">model:</span> ${esc(modelFor(state, id).label)}${modelFor(state, id).actual ? "" : " <span class=\"muted\">(configured)</span>"}` : "") +
       (id === "manager" ? `<br><span class="muted">Click to chat 💬</span>` : "");
     tip.hidden = false;
     const ox = e.clientX - r.left + 14;

@@ -1,5 +1,5 @@
 // Chat dock: talk to the manager by text (or dictate with the mic). Messages persist in .claude/team/chat.json via the server.
-import { AGENT_BY_ID, esc } from "./agents.js";
+import { AGENT_BY_ID, esc, prettyModel } from "./agents.js";
 
 export function createChat() {
   const $ = (id) => document.getElementById(id);
@@ -45,15 +45,28 @@ export function createChat() {
         })
         .join("");
     }
-    if (chat.busy) log.insertAdjacentHTML("beforeend", `<li class="them typing"><span class="from"><i style="background:#e66767"></i>MANAGER</span><span class="text">typing</span></li>`);
+    // while the manager is replying, show the reply as it's being written
+    if (chat.busy) log.insertAdjacentHTML("beforeend", `<li class="them typing"><span class="from"><i style="background:#e66767"></i>MANAGER</span><span class="text" id="draftText"></span></li>`);
     if (lastError) log.insertAdjacentHTML("beforeend", `<li class="sys"><span class="text">${esc(lastError)}</span></li>`);
-    log.scrollTop = log.scrollHeight;
+    renderDraft();
 
-    status.textContent = chat.busy ? "● typing…" : lastError ? "● server unreachable" : "● online";
+    status.textContent = chat.busy ? (chat.draft ? "● typing…" : "● thinking…") : lastError ? "● server unreachable" : "● online";
     status.className = "chat-status" + (chat.busy ? " busy" : lastError ? " off" : "");
+    $("chatModel").textContent = chat.managerModel ? `· ${prettyModel(chat.managerModel)}` : "";
+    $("chatModel").title = chat.managerModel ? `Manager model: ${chat.managerModel}` : "";
     sendBtn.disabled = chat.busy;
     $("chatSuggest").hidden = msgs.length > 0;
     renderRunBar();
+  }
+
+  function renderDraft() {
+    const el = $("draftText");
+    if (el) {
+      el.textContent = chat.draft || "";
+      el.classList.toggle("thinking", !chat.draft);
+    }
+    const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+    if (nearBottom || !el) log.scrollTop = log.scrollHeight;
   }
 
   // A run the manager proposed; buttons only while it's still the pending proposal.
@@ -115,11 +128,16 @@ export function createChat() {
       }
       primed = true;
       const changed =
-        msgs.length !== lastCount || next.busy !== chat.busy || fresh.length > 0 ||
+        msgs.length !== lastCount || next.busy !== chat.busy || fresh.length > 0 || next.managerModel !== chat.managerModel ||
         next.proposal?.id !== chat.proposal?.id || JSON.stringify(next.run) !== JSON.stringify(chat.run);
+      const draftChanged = next.draft !== chat.draft;
       chat = next;
       lastCount = msgs.length;
       if (changed) render();
+      else if (draftChanged) {
+        renderDraft(); // only the streaming text moved — don't rebuild the whole log
+        status.textContent = chat.draft ? "● typing…" : "● thinking…";
+      }
     } catch {
       if (!lastError) {
         lastError = "Can't reach the office server.";
@@ -213,8 +231,10 @@ export function createChat() {
 
   setOpen(open);
   render();
-  poll();
-  setInterval(poll, 1000);
+  // poll fast while the manager is writing (to stream its reply), slowly otherwise
+  (function loop() {
+    poll().finally(() => setTimeout(loop, chat.busy ? 250 : 1000));
+  })();
 
   return { open: () => setOpen(true) };
 }

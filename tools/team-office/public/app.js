@@ -14,9 +14,10 @@ const office = createOffice({
 let mode = new URLSearchParams(location.search).has("demo") ? "demo" : "live";
 let state = {};
 let lastStamp = 0;
+let configuredModels = {}; // from the agents' definitions; shown until a run reports actual models
 
 function apply(next) {
-  state = next;
+  state = { ...next, configuredModels };
   office.update(state);
   renderHeader(state);
   renderGraph(state);
@@ -55,13 +56,14 @@ async function poll() {
   try {
     const res = await fetch("/api/state", { cache: "no-store" });
     const s = await res.json();
+    configuredModels = s.configuredModels || configuredModels;
     const empty = !s.task;
     $("banner").hidden = !empty;
     const stamp = s.updatedAt || -1;
     if (stamp !== lastStamp) {
       lastStamp = stamp;
-      // Between runs only agent states matter (e.g. the manager answering chat).
-      apply(empty ? { phase: "idle", agents: s.agents || {}, tasks: [], events: [] } : s);
+      // Between runs only agent states (e.g. the manager answering chat) and models matter.
+      apply(empty ? { phase: "idle", agents: s.agents || {}, models: s.models || {}, configuredModels, tasks: [], events: [] } : s);
     }
   } catch {
     $("banner").hidden = false;
@@ -81,6 +83,14 @@ window.addEventListener("resize", tick);
 
 renderLegends();
 apply({ phase: "idle", agents: {}, tasks: [], events: [] });
+// demo mode never polls, so fetch the configured models once for the roster
+fetch("/api/state", { cache: "no-store" })
+  .then((r) => r.json())
+  .then((s) => {
+    configuredModels = s.configuredModels || {};
+    if (mode === "demo") apply(state);
+  })
+  .catch(() => {});
 setMode(mode);
 setInterval(() => {
   poll();

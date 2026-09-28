@@ -44,7 +44,11 @@ switch (cmd) {
   case "init": {
     withLock(() => {
       if (fs.existsSync(STATE_FILE)) fs.copyFileSync(STATE_FILE, path.join(DIR, "state.prev.json"));
+      const prev = readState();
       const s = emptyState(args[0] || "Untitled task");
+      // keep models already seen for this session (the run's lead is recorded before it calls init; the manager persists)
+      s.models = Object.fromEntries(Object.entries(prev.models || {}).filter(([k]) => k === "lead" || k === "manager"));
+      s.agents.manager = prev.agents.manager;
       event(s, { type: "log", agent: "", msg: `New run: ${s.task}` });
       writeState(s);
     });

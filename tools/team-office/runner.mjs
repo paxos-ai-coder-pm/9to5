@@ -3,7 +3,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
-import { ROOT, DIR } from "./lib.mjs";
+import { ROOT, DIR, updateState, setModel } from "./lib.mjs";
+import { createStreamParser } from "./stream.mjs";
 
 const RUN_FILE = path.join(DIR, "run.json");
 const LOG_DIR = path.join(DIR, "runs");
@@ -109,26 +110,25 @@ export function startRun({ project, task }, onEnd) {
   const run = { id, project: p.name, dir: p.dir, isNew: p.isNew, task, status: "running", startedAt: Date.now(), pid: child.pid, log: logFile };
   writeRun(run);
 
+  // record the model each participant actually runs on: "lead" (orchestrator) and every subagent it spawns
+  const parser = createStreamParser({
+    onModel: (model, agent) => {
+      try {
+        updateState((s) => setModel(s, agent || "lead", model));
+      } catch {}
+    },
+  });
   let lastResult = null;
-  let buf = "";
   child.stdout.on("data", (d) => {
     log.write(d);
-    buf += d;
-    let i;
-    while ((i = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, i);
-      buf = buf.slice(i + 1);
-      try {
-        const ev = JSON.parse(line);
-        if (ev.type === "result") lastResult = ev;
-      } catch {}
-    }
+    parser.push(d);
   });
   child.stderr.on("data", (d) => log.write(d));
   const finish = (code, err) => {
     if (!child) return;
     child = null;
     log.end();
+    lastResult = parser.end();
     const status = stopping ? "stopped" : err || code !== 0 || lastResult?.is_error ? "failed" : "finished";
     const done = { ...run, status, endedAt: Date.now(), exitCode: code, error: err || (lastResult?.is_error ? String(lastResult.result).slice(0, 300) : undefined) };
     writeRun(done);

@@ -9,8 +9,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { ROOT, STATE_FILE, CHAT_FILE, readState, readChat, updateChat, updateState, setAgent, summary } from "./lib.mjs";
+import { ROOT, STATE_FILE, CHAT_FILE, readState, readChat, updateChat, updateState, setAgent, setModel, configuredModels, summary } from "./lib.mjs";
 import { readRun, startRun, stopRun, isRunning, resolveProject, recoverRunState } from "./runner.mjs";
+import { createStreamParser } from "./stream.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(HERE, "public");
@@ -71,13 +72,13 @@ function askManager(text, sessionId) {
     `<team_snapshot at="${new Date().toLocaleString()}">\n${runSnapshot()}\n\nOffice board:\n${s.task ? summary(s) : "No run in progress — the team is idle."}\n` +
     (s.events?.length ? `Recent events:\n${recentEvents(s)}\n` : "") +
     `</team_snapshot>`;
-  const args = ["-p", "--agent", "manager", "--output-format", "json", "--strict-mcp-config", "--permission-mode", "dontAsk"];
+  // stream-json + partial messages → we see the reply token by token and can show it while it's being written
+  const args = ["-p", "--agent", "manager", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--strict-mcp-config", "--permission-mode", "dontAsk"];
   if (sessionId) args.push("--resume", sessionId);
   const env = { ...process.env };
   delete env.CLAUDECODE; // let the CLI run even if this server was launched from inside a Claude Code session
 
   return new Promise((resolve) => {
-    let out = "";
     let err = "";
     let child;
     try {
@@ -86,7 +87,11 @@ function askManager(text, sessionId) {
       return resolve({ error: `Couldn't start the Claude CLI (${e.message}).` });
     }
     const timer = setTimeout(() => child.kill(), REPLY_TIMEOUT_MS);
-    child.stdout.on("data", (d) => (out += d));
+    const parser = createStreamParser({
+      onText: (text) => (draft = visibleDraft(text)),
+      onModel: (model, agent) => !agent && updateState((s) => setModel(s, "manager", model)),
+    });
+    child.stdout.on("data", (d) => parser.push(d));
     child.stderr.on("data", (d) => (err += d));
     child.on("error", (e) => {
       clearTimeout(timer);
@@ -94,16 +99,22 @@ function askManager(text, sessionId) {
     });
     child.on("close", () => {
       clearTimeout(timer);
-      try {
-        const r = JSON.parse(out.trim().split("\n").pop());
-        if (r.is_error) return resolve({ error: r.result || "The manager hit an error.", sessionId: r.session_id });
-        resolve({ text: r.result || "", sessionId: r.session_id });
-      } catch {
-        resolve({ error: (err || out || "No reply (timed out?)").trim().slice(0, 400) });
-      }
+      const r = parser.end();
+      if (!r) return resolve({ error: (err || "No reply (timed out?)").trim().slice(0, 400) });
+      if (r.is_error) return resolve({ error: r.result || "The manager hit an error.", sessionId: r.session_id });
+      resolve({ text: r.result || "", sessionId: r.session_id });
     });
     child.stdin.end(prompt);
   });
+}
+
+// The reply as it's being written, minus directive lines (and a trailing half-written one).
+let draft = "";
+function visibleDraft(text) {
+  const lines = text.split("\n").filter((l) => !/^\s*(RELAY|PROPOSE|START):/.test(l));
+  const last = lines[lines.length - 1]?.trim() || "";
+  if (last && /^[A-Z]{1,7}$/.test(last) && ["RELAY:", "PROPOSE:", "START:"].some((d) => d.startsWith(last))) lines.pop();
+  return lines.join("\n").trimEnd();
 }
 
 // Directive lines the manager appends (hidden from the user):
@@ -138,9 +149,14 @@ async function handleChat(text) {
   });
   updateState((s) => setAgent(s, "manager", "working", "Replying to you"));
 
+  draft = "";
   let r = await askManager(text, sessionId);
   // A stale/unknown session id: retry once as a fresh conversation.
-  if (r.error && sessionId && /session|conversation/i.test(r.error)) r = await askManager(text, null);
+  if (r.error && sessionId && /session|conversation/i.test(r.error)) {
+    draft = "";
+    r = await askManager(text, null);
+  }
+  setTimeout(() => (draft = ""), 1500); // keep the draft briefly so the final message replaces it without a flash
 
   if (r.error) {
     const loginHint = /log ?in|auth|401/i.test(r.error)
@@ -220,11 +236,11 @@ http
     const url = new URL(req.url, "http://localhost");
 
     if (url.pathname === "/api/state") {
-      let body = "{}";
+      let state = {};
       try {
-        body = fs.readFileSync(STATE_FILE, "utf8");
+        state = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
       } catch {}
-      return send(res, 200, body);
+      return send(res, 200, { ...state, configuredModels: configuredModels() });
     }
 
     if (url.pathname === "/api/chat" && req.method === "GET") {
@@ -232,7 +248,8 @@ http
       try {
         chat = JSON.parse(fs.readFileSync(CHAT_FILE, "utf8"));
       } catch {}
-      return send(res, 200, { ...chat, run: readRun() });
+      const managerModel = readState().models?.manager || configuredModels().manager || "";
+      return send(res, 200, { ...chat, run: readRun(), draft: chat.busy ? draft : "", managerModel });
     }
 
     // Only accept same-origin JSON posts, so other websites can't drive the manager or launch runs.

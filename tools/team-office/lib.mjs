@@ -102,6 +102,28 @@ export function setAgent(state, name, st, activity = "") {
   event(state, { type: "state", agent: name, state: st, msg: activity || st });
 }
 
+// Record the model an agent actually ran on ("lead" = the orchestrating session). Returns true if it changed.
+export function setModel(state, agent, model) {
+  if (!model || state.models?.[agent] === model) return false;
+  state.models = { ...(state.models || {}), [agent]: model };
+  return true;
+}
+
+// Configured model per agent, from the `model:` field of .claude/agents/*.md frontmatter.
+export function configuredModels() {
+  const dir = path.join(ROOT, ".claude", "agents");
+  const out = {};
+  try {
+    for (const f of fs.readdirSync(dir)) {
+      if (!f.endsWith(".md")) continue;
+      const fm = fs.readFileSync(path.join(dir, f), "utf8").match(/^---\r?\n([\s\S]*?)\r?\n---/);
+      const name = fm?.[1].match(/^name:\s*(.+)$/m)?.[1].trim() || f.slice(0, -3);
+      out[name] = fm?.[1].match(/^model:\s*(.+)$/m)?.[1].trim() || "inherit";
+    }
+  } catch {}
+  return out;
+}
+
 export function readyIds(state) {
   const done = new Set(state.tasks.filter((t) => t.status === "done").map((t) => t.id));
   return state.tasks.filter((t) => t.status === "pending" && (t.depends_on || []).every((d) => done.has(d))).map((t) => t.id);

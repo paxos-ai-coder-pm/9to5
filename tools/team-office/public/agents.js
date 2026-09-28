@@ -35,6 +35,24 @@ export function taskStatus(task, tasks) {
   return (task.depends_on || []).every((d) => done.has(d)) ? "ready" : "pending";
 }
 
+// "claude-opus-5-5" → "Opus 5.5", "claude-haiku-4-5-20251001" → "Haiku 4.5", "sonnet" → "Sonnet", "inherit" → "Same as lead"
+export function prettyModel(id) {
+  if (!id) return "";
+  const m = String(id).match(/(opus|sonnet|haiku|fable)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?/i);
+  const cap = (s) => s[0].toUpperCase() + s.slice(1).toLowerCase();
+  if (m) return `${cap(m[1])} ${m[2]}${m[3] ? "." + m[3] : ""}`;
+  if (id === "inherit") return "Same as lead";
+  return /^[a-z]+$/.test(id) ? cap(id) : id;
+}
+
+// Actual model if a run/chat has reported one, else the configured alias from the agent's definition.
+export function modelFor(state, agentId) {
+  const actual = state?.models?.[agentId];
+  if (actual) return { label: prettyModel(actual), id: actual, actual: true };
+  const conf = state?.configuredModels?.[agentId];
+  return conf ? { label: prettyModel(conf), id: conf, actual: false } : null;
+}
+
 export function fmtDur(ms) {
   const s = Math.max(0, Math.round(ms / 1000));
   const m = Math.floor(s / 60);

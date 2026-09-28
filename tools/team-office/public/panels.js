@@ -1,4 +1,4 @@
-import { AGENTS, AGENT_BY_ID, STATUS, AGENT_STATE, taskStatus, fmtDur, esc } from "./agents.js";
+import { AGENTS, AGENT_BY_ID, STATUS, AGENT_STATE, taskStatus, fmtDur, esc, modelFor } from "./agents.js";
 
 const PHASES = ["plan", "build", "test", "fix", "review", "done"];
 const PHASE_PCT = { idle: 0, plan: 5, build: 30, test: 60, fix: 70, review: 90, done: 100 };
@@ -56,15 +56,29 @@ export function renderHeader(s) {
 }
 
 // ---------------- roster ----------------
+function modelBadge(mdl) {
+  if (!mdl) return "";
+  const tip = mdl.actual ? `Running on ${mdl.id}` : `Configured: ${mdl.id} (actual model shows once it runs)`;
+  return `<span class="model${mdl.actual ? " actual" : ""}" title="${esc(tip)}">⚙ ${esc(mdl.label)}</span>`;
+}
+
 export function renderRoster(s, now) {
-  document.getElementById("roster").innerHTML = AGENTS.map((a) => {
-    const ag = s.agents?.[a.id] || { state: "idle" };
-    const m = AGENT_STATE[ag.state] || AGENT_STATE.idle;
-    return `<li><i class="sw" style="background:${a.color}"></i><div style="min-width:0">
+  const lead = modelFor(s, "lead");
+  const leadCard = `<li class="lead-card"><i class="sw" style="background:#f2f2ee"></i><div style="min-width:0">
+      <span class="nm">team lead</span>
+      <span class="st">Orchestrates the pipeline</span>
+      ${modelBadge(lead) || `<span class="model" title="Runs you start with /team use your Claude Code session's model">⚙ Your session's model</span>`}</div></li>`;
+  document.getElementById("roster").innerHTML =
+    leadCard +
+    AGENTS.map((a) => {
+      const ag = s.agents?.[a.id] || { state: "idle" };
+      const m = AGENT_STATE[ag.state] || AGENT_STATE.idle;
+      return `<li><i class="sw" style="background:${a.color}"></i><div style="min-width:0">
       <span class="nm">${a.id}</span>
       <span class="st">${m.icon} ${m.label}${ag.since && ag.state !== "idle" ? ` · ${fmtDur(now - ag.since)}` : ""}</span>
-      <span class="ac" title="${esc(ag.activity)}">${esc(ag.activity || a.role)}</span></div></li>`;
-  }).join("");
+      <span class="ac" title="${esc(ag.activity)}">${esc(ag.activity || a.role)}</span>
+      ${modelBadge(modelFor(s, a.id))}</div></li>`;
+    }).join("");
 }
 
 // ---------------- execution graph ----------------
