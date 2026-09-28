@@ -10,6 +10,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { ROOT, STATE_FILE, CHAT_FILE, readState, readChat, updateChat, updateState, setAgent, summary } from "./lib.mjs";
+import { readRun, startRun, stopRun, isRunning, resolveProject, recoverRunState } from "./runner.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(HERE, "public");
@@ -45,11 +46,29 @@ function recentEvents(s, n = 12) {
     .join("\n");
 }
 
+function runSnapshot() {
+  const run = readRun();
+  const { proposal } = readChat();
+  const t = (ms) => new Date(ms).toLocaleTimeString();
+  let projects = [];
+  try {
+    projects = fs.readdirSync(path.resolve(ROOT, ".."), { withFileTypes: true }).filter((d) => d.isDirectory() && !d.name.startsWith(".")).map((d) => d.name);
+  } catch {}
+  return [
+    run
+      ? `Pipeline run: ${run.status.toUpperCase()} — project "${run.project}" (${run.dir}) — task: ${run.task} — started ${t(run.startedAt)}${run.endedAt ? `, ended ${t(run.endedAt)}` : ""}${run.error ? ` — error: ${run.error}` : ""}`
+      : "No pipeline run has been started from the office yet.",
+    proposal ? `Pending proposal (waiting for the user's confirmation): project "${proposal.project}"${proposal.isNew ? " (new folder)" : ""} — ${proposal.task}` : "No pending proposal.",
+    `This repo (Merage Hub, project name "merage-hub"): ${ROOT}`,
+    `Sibling project folders in ${path.resolve(ROOT, "..")}: ${projects.join(", ") || "(none)"}`,
+  ].join("\n");
+}
+
 function askManager(text, sessionId) {
   const s = readState();
   const prompt =
     `${text}\n\n` +
-    `<team_snapshot at="${new Date().toLocaleString()}">\n${s.task ? summary(s) : "No run in progress — the team is idle."}\n` +
+    `<team_snapshot at="${new Date().toLocaleString()}">\n${runSnapshot()}\n\nOffice board:\n${s.task ? summary(s) : "No run in progress — the team is idle."}\n` +
     (s.events?.length ? `Recent events:\n${recentEvents(s)}\n` : "") +
     `</team_snapshot>`;
   const args = ["-p", "--agent", "manager", "--output-format", "json", "--strict-mcp-config", "--permission-mode", "dontAsk"];
@@ -87,18 +106,28 @@ function askManager(text, sessionId) {
   });
 }
 
-function splitRelays(text) {
+// Directive lines the manager appends (hidden from the user):
+//   RELAY: <instruction for the team>        PROPOSE: <project-folder> | <task>        START:
+function parseDirectives(text) {
   const relays = [];
+  let propose = null;
+  let start = false;
   const body = text
     .split("\n")
     .filter((line) => {
-      const m = line.match(/^\s*RELAY:\s*(.+)$/);
-      if (m) relays.push(m[1].trim());
-      return !m;
+      const m = line.match(/^\s*(RELAY|PROPOSE|START):\s*(.*)$/);
+      if (!m) return true;
+      if (m[1] === "RELAY" && m[2].trim()) relays.push(m[2].trim());
+      if (m[1] === "PROPOSE") {
+        const [project, ...rest] = m[2].split("|");
+        if (rest.length && rest.join("|").trim()) propose = { project: project.trim(), task: rest.join("|").trim() };
+      }
+      if (m[1] === "START") start = true;
+      return false;
     })
     .join("\n")
     .trim();
-  return { body, relays };
+  return { body, relays, propose, start };
 }
 
 async function handleChat(text) {
@@ -126,16 +155,64 @@ async function handleChat(text) {
     return;
   }
 
-  const { body, relays } = splitRelays(r.text);
+  const { body, relays, propose, start } = parseDirectives(r.text);
+
+  // PROPOSE → a run card the user can confirm; the manager decides the project folder and task.
+  let proposal = null;
+  let notice = null;
+  if (propose) {
+    try {
+      const p = resolveProject(propose.project);
+      proposal = { id: crypto.randomUUID(), t: Date.now(), project: p.name, dir: p.dir, isNew: p.isNew, task: propose.task };
+    } catch (e) {
+      notice = `Couldn't prepare that run: ${e.message}`;
+    }
+  }
+
   updateChat((c) => {
     c.busy = false;
     c.sessionId = r.sessionId || c.sessionId;
-    c.messages.push(msg("manager", body || "(no reply)", relays.length ? { relays } : {}));
+    c.messages.push(msg("manager", body || "(no reply)", { ...(relays.length ? { relays } : {}), ...(proposal ? { proposal } : {}) }));
+    if (proposal) c.proposal = proposal;
+    if (notice) c.messages.push(msg("system", notice));
     for (const t of relays) c.inbox.push({ id: crypto.randomUUID(), t: Date.now(), text: t, read: false });
   });
   updateState((s) => {
-    setAgent(s, "manager", "waiting", relays.length ? `Relayed ${relays.length} note(s) to team` : "Here if you need me");
+    setAgent(s, "manager", "waiting", proposal ? "Waiting for your go-ahead" : relays.length ? `Relayed ${relays.length} note(s) to team` : "Here if you need me");
   });
+
+  // START → only launches a run the user has already seen proposed (guards against starting unconfirmed work).
+  if (start) {
+    const pending = readChat().proposal;
+    if (pending) launch(pending);
+    else systemMessage("The manager tried to start a run without proposing one first — ask it to propose the run so you can confirm it.");
+  }
+}
+
+function systemMessage(text) {
+  updateChat((c) => c.messages.push(msg("system", text)));
+}
+
+function launch(proposal) {
+  if (isRunning()) return systemMessage("A run is already in progress — stop it (■ in the chat) before starting another.");
+  try {
+    startRun({ project: proposal.project, task: proposal.task }, (run) => {
+      const how = {
+        finished: `✅ Run finished — ${run.task}. Files are in ${run.dir}.`,
+        stopped: `■ Run stopped — ${run.task}.`,
+        failed: `⚠️ Run failed — ${run.task}.${run.error ? ` ${run.error}` : ""} Log: ${run.log}`,
+      }[run.status];
+      systemMessage(how);
+      updateState((s) => setAgent(s, "manager", "waiting", `Run ${run.status}`));
+    });
+    updateChat((c) => {
+      c.proposal = null;
+      c.messages.push(msg("system", `🚀 Run started: ${proposal.task}\nProject folder: ${proposal.dir}${proposal.isNew ? " (new)" : ""}. The team will post the plan here for your go-ahead before building.`));
+    });
+    updateState((s) => setAgent(s, "manager", "waiting", "Team is on it"));
+  } catch (e) {
+    systemMessage(`Couldn't start the run: ${e.message}`);
+  }
 }
 
 http
@@ -151,19 +228,50 @@ http
     }
 
     if (url.pathname === "/api/chat" && req.method === "GET") {
-      let body = null;
+      let chat = { messages: [], inbox: [], busy: false };
       try {
-        body = fs.readFileSync(CHAT_FILE, "utf8");
+        chat = JSON.parse(fs.readFileSync(CHAT_FILE, "utf8"));
       } catch {}
-      return send(res, 200, body || JSON.stringify({ messages: [], inbox: [], busy: false }));
+      return send(res, 200, { ...chat, run: readRun() });
+    }
+
+    // Only accept same-origin JSON posts, so other websites can't drive the manager or launch runs.
+    const sameOriginJson = () => {
+      const origin = req.headers.origin;
+      return !(origin && new URL(origin).host !== req.headers.host) && String(req.headers["content-type"]).startsWith("application/json");
+    };
+
+    if (url.pathname === "/api/run" && req.method === "POST") {
+      if (!sameOriginJson()) return send(res, 403, { error: "forbidden" });
+      let body;
+      try {
+        body = JSON.parse(await readBody(req, 1024));
+      } catch {
+        return send(res, 400, { error: "bad request" });
+      }
+      const pending = readChat().proposal;
+      if (body.action === "start") {
+        if (!pending || pending.id !== body.proposalId) return send(res, 409, { error: "That proposal is no longer pending." });
+        updateChat((c) => c.messages.push(msg("user", "▶ Start")));
+        launch(pending);
+        return send(res, 200, { ok: true });
+      }
+      if (body.action === "dismiss") {
+        if (pending && pending.id === body.proposalId)
+          updateChat((c) => {
+            c.proposal = null;
+            c.messages.push(msg("user", "Not yet"));
+          });
+        return send(res, 200, { ok: true });
+      }
+      if (body.action === "stop") {
+        return send(res, 200, { ok: stopRun() });
+      }
+      return send(res, 400, { error: "unknown action" });
     }
 
     if (url.pathname === "/api/chat" && req.method === "POST") {
-      // Only accept same-origin JSON posts, so other websites can't drive the manager.
-      const origin = req.headers.origin;
-      if ((origin && new URL(origin).host !== req.headers.host) || !String(req.headers["content-type"]).startsWith("application/json")) {
-        return send(res, 403, { error: "forbidden" });
-      }
+      if (!sameOriginJson()) return send(res, 403, { error: "forbidden" });
       let text;
       try {
         text = String(JSON.parse(await readBody(req)).text || "").trim();
@@ -193,6 +301,7 @@ http
     // Clear a stale "busy" flag left by a server that was stopped mid-reply.
     try {
       if (readChat().busy) updateChat((c) => (c.busy = false));
+      recoverRunState();
     } catch {}
     console.log(`Team office running at http://localhost:${PORT}`);
   });

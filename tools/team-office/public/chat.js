@@ -34,14 +34,14 @@ export function createChat() {
   function render() {
     const msgs = chat.messages || [];
     if (!msgs.length) {
-      log.innerHTML = `<li class="empty">👋 I'm the team manager.<br>Ask me how the work is going, or give the team instructions — I'll pass them on.</li>`;
+      log.innerHTML = `<li class="empty">👋 I'm the team manager.<br>Tell me what you want built — I'll scope it, propose a plan, and get the team started once you say go.</li>`;
     } else {
       log.innerHTML = msgs
         .map((m) => {
           if (m.from === "system") return `<li class="sys"><span class="text">${esc(m.text)}</span></li>`;
           if (m.from === "user") return `<li class="me"><span class="from">YOU</span><span class="text">${esc(m.text)}</span></li>`;
           const a = AGENT_BY_ID[m.from];
-          return `<li class="them"><span class="from"><i style="background:${a?.color || "#888"}"></i>${esc(m.from.toUpperCase())}</span><span class="text">${esc(m.text)}</span>${(m.relays || []).map((r) => `<span class="relay">${esc(r)}</span>`).join("")}</li>`;
+          return `<li class="them"><span class="from"><i style="background:${a?.color || "#888"}"></i>${esc(m.from.toUpperCase())}</span><span class="text">${esc(m.text)}</span>${(m.relays || []).map((r) => `<span class="relay">${esc(r)}</span>`).join("")}${m.proposal ? proposalCard(m.proposal) : ""}</li>`;
         })
         .join("");
     }
@@ -53,7 +53,47 @@ export function createChat() {
     status.className = "chat-status" + (chat.busy ? " busy" : lastError ? " off" : "");
     sendBtn.disabled = chat.busy;
     $("chatSuggest").hidden = msgs.length > 0;
+    renderRunBar();
   }
+
+  // A run the manager proposed; buttons only while it's still the pending proposal.
+  function proposalCard(p) {
+    const pending = chat.proposal?.id === p.id;
+    return `<div class="proposal">
+      <div class="p-head">🚀 PROPOSED RUN</div>
+      <div class="p-task">${esc(p.task)}</div>
+      <div class="p-dir">📁 ${esc(p.dir)}${p.isNew ? " <b>(new folder)</b>" : ""}</div>
+      ${pending ? `<div class="p-actions"><button class="px-btn small" data-run="start" data-id="${esc(p.id)}">▶ START</button><button class="px-btn small ghost" data-run="dismiss" data-id="${esc(p.id)}">NOT YET</button></div>` : ""}
+    </div>`;
+  }
+
+  function renderRunBar() {
+    const bar = $("runBar");
+    const run = chat.run;
+    if (!run) return void (bar.hidden = true);
+    const icon = { running: "●", finished: "✓", failed: "✖", stopped: "■", interrupted: "!" }[run.status] || "●";
+    const recent = run.status === "running" || Date.now() - (run.endedAt || 0) < 10 * 60 * 1000;
+    bar.hidden = !recent;
+    bar.className = "run-bar " + run.status;
+    bar.innerHTML = `<span class="r-status">${icon} RUN ${esc(run.status.toUpperCase())}</span><span class="r-task" title="${esc(run.task)}">${esc(run.project)} · ${esc(run.task)}</span>${
+      run.status === "running" ? `<button class="px-btn small ghost" data-run="stop" title="Stop the team">■ STOP</button>` : ""
+    }`;
+  }
+
+  async function runAction(action, proposalId) {
+    if (action === "stop" && !confirm("Stop the team's current run?")) return;
+    try {
+      const res = await fetch("/api/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, proposalId }) });
+      if (!res.ok) lastError = (await res.json().catch(() => ({}))).error || `Request failed (${res.status})`;
+    } catch {
+      lastError = "Can't reach the office server.";
+    }
+    poll();
+  }
+  box.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-run]");
+    if (b) runAction(b.dataset.run, b.dataset.id);
+  });
 
   const seen = new Set(); // message ids already counted for the unread badge
   let primed = false;
@@ -74,7 +114,9 @@ export function createChat() {
         badge.hidden = !unread;
       }
       primed = true;
-      const changed = msgs.length !== lastCount || next.busy !== chat.busy || fresh.length > 0;
+      const changed =
+        msgs.length !== lastCount || next.busy !== chat.busy || fresh.length > 0 ||
+        next.proposal?.id !== chat.proposal?.id || JSON.stringify(next.run) !== JSON.stringify(chat.run);
       chat = next;
       lastCount = msgs.length;
       if (changed) render();

@@ -252,6 +252,18 @@ body { padding-bottom: 20px; }
 .chat-log .sys .text { background: transparent; color: var(--text-secondary); box-shadow: inset 0 0 0 2px var(--border); font-size: 17px; }
 .chat-log .relay { font-size: 16px; color: var(--text-secondary); padding-left: 4px; }
 .chat-log .relay::before { content: "📨 passed to team: "; color: var(--text-muted); }
+.proposal { margin-top: 6px; padding: 8px 10px; background: #1f2a1f; color: var(--text-primary); box-shadow: inset 0 0 0 2px var(--good); display: flex; flex-direction: column; gap: 5px; }
+.proposal .p-head { font-family: var(--px); font-size: 8px; color: #7ee07e; }
+.proposal .p-task { line-height: 1.15; }
+.proposal .p-dir { font-size: 16px; color: var(--text-secondary); word-break: break-all; }
+.proposal .p-actions { display: flex; gap: 8px; margin-top: 2px; }
+.run-bar { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-bottom: 3px solid var(--border); background: #1c2230; font-size: 17px; }
+.run-bar .r-status { font-family: var(--px); font-size: 8px; white-space: nowrap; }
+.run-bar .r-task { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-secondary); }
+.run-bar.running .r-status { color: var(--warning); animation: blink 1s steps(2) infinite; }
+.run-bar.finished .r-status { color: #7ee07e; }
+.run-bar.failed .r-status, .run-bar.interrupted .r-status { color: #ff8a8a; }
+.run-bar.stopped .r-status { color: var(--text-muted); }
 .chat-log .typing .text::after { content: "▌"; animation: blink .6s steps(2) infinite; }
 .chat-log .empty { color: var(--text-muted); align-self: center; text-align: center; max-width: 100%; margin-top: 20px; }
 .chat-suggest { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 12px 10px; }

@@ -21,7 +21,7 @@ architect ─▶ dev-1 ┐          ┌▶ tester-api  ┐
 | `reviewer` | Final gate: reviews the diff against the plan and test results → APPROVE / REQUEST CHANGES. Read-only. | Opus |
 | `manager` | Your point of contact. Answers questions about progress in plain language and relays your instructions to the team. Read-only. | Sonnet |
 
-The agent prompts are currently tuned for a Next.js 16 + Prisma + shadcn/ui app (Merage Hub) — edit the stack notes in `.claude/agents/*.md` for other projects.
+The agents are stack-agnostic: they detect the project's stack (with extra notes for Next.js and Manifest V3 browser extensions), and the architect picks a stack for new projects.
 
 ## The pipeline: `/team <task>`
 
@@ -34,6 +34,7 @@ The `/team` skill (`.claude/skills/team/SKILL.md`) runs PLAN → BUILD → TEST 
 - **Pixel office** — each agent is a character with its own desk; they walk from the lounge to their desk when they start work, type, and show what they're doing in speech bubbles. The whiteboard shows one sticky note per task.
 - **Progress** — phase tracker, % of tasks done, a dependency graph of the plan (status shown by icon + label), a Gantt-style agent timeline, and a live activity log.
 - **Manager chat** — type (or dictate with 🎤 in Chrome/Edge) to talk to the manager, who gets a live snapshot of the team with each message. Instructions are queued in an inbox that `/team` reads at every phase boundary; the team can post back to you with `team.mjs say`.
+- **The manager starts the team** — describe what you want; the manager scopes it, decides where it goes (Merage Hub, an existing sibling project, or a new sibling folder), and proposes a run. Confirm with ▶ Start (or just say "go") and the office launches `/team` headlessly (`claude -p`) in that folder. Plan approval and questions come back through the chat; ■ Stop kills the run. Background runs can edit files inside the project folder and run node/npm/npx/curl/read-only git — never commit or push. Logs: `.claude/team/runs/`.
 - **Demo** — click *Watch demo* (or open `/?demo`) to see a simulated run.
 
 The execution graph uses [AmnesiaGraph](https://github.com/turio/AmnesiaGraph)'s normalized task format (`id`, `order`, `title`, `source`, `depends_on`, `verify`) plus an `owner` field, so the same file can be fed to `amnesia init`.

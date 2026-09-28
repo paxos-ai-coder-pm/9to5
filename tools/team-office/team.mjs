@@ -105,7 +105,7 @@ switch (cmd) {
       for (const c of t.verify) {
         console.log(`$ ${c}`);
         try {
-          execSync(c, { cwd: ROOT, stdio: "inherit", timeout: 300000 });
+          execSync(c, { cwd: process.cwd(), stdio: "inherit", timeout: 300000 }); // run in the project being built
         } catch {
           updateState((s) => setTask(s, id, "blocked", `verify failed: ${c}`));
           fail(`${id} blocked: verify failed: ${c}`);
