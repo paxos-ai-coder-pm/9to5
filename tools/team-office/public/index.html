@@ -78,24 +78,17 @@
         <h2>MANAGER</h2>
         <span class="chat-status" id="chatStatus">● online</span>
       </div>
-      <button class="icon-btn" id="speakBtn" aria-pressed="false" title="Read replies aloud">🔈</button>
       <button class="icon-btn" id="chatMin" title="Minimize">▁</button>
     </header>
-    <div class="voice-row" id="voiceRow">
-      <label for="voiceSel">VOICE</label>
-      <select id="voiceSel"></select>
-      <label for="langSel">LANG</label>
-      <select id="langSel">
-        <option value="en">English</option>
-        <option value="hi">हिन्दी</option>
-      </select>
-      <span class="voice-status" id="voiceStatus"></span>
-    </div>
     <ol class="chat-log" id="chatLog" aria-live="polite"></ol>
-    <div class="chat-suggest" id="chatSuggest"></div>
+    <div class="chat-suggest" id="chatSuggest">
+      <button>What's the status?</button>
+      <button>Anything blocked?</button>
+      <button>Who's working on what?</button>
+    </div>
     <form class="chat-input" id="chatForm">
       <textarea id="chatText" rows="1" maxlength="4000" placeholder="Message the manager…" aria-label="Message"></textarea>
-      <button type="button" class="icon-btn mic" id="micBtn" title="Speak (voice input)" aria-pressed="false">🎤</button>
+      <button type="button" class="icon-btn mic" id="micBtn" title="Dictate (types what you say)" aria-pressed="false">🎤</button>
       <button type="submit" class="px-btn send" id="sendBtn" title="Send (Enter)">➤</button>
     </form>
   </aside>

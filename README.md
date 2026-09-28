@@ -6,7 +6,7 @@ An 8-agent software team for [Claude Code](https://claude.com/claude-code), plus
 architect ─▶ dev-1 ┐          ┌▶ tester-api  ┐
              dev-2 ┘ (parallel)├▶ tester-ui   ├─▶ reviewer
                                └▶ tester-edge ┘
-                 manager ◀──▶ you (chat / voice)
+                 manager ◀──▶ you (chat)
 ```
 
 ## The team
@@ -33,10 +33,7 @@ The `/team` skill (`.claude/skills/team/SKILL.md`) runs PLAN → BUILD → TEST 
 
 - **Pixel office** — each agent is a character with its own desk; they walk from the lounge to their desk when they start work, type, and show what they're doing in speech bubbles. The whiteboard shows one sticky note per task.
 - **Progress** — phase tracker, % of tasks done, a dependency graph of the plan (status shown by icon + label), a Gantt-style agent timeline, and a live activity log.
-- **Manager chat** — type or talk (🎤, Web Speech API in Chrome/Edge), the manager speaks replies aloud with a talking animation in the office (🔊 to mute, ▶ to replay a message; always on when you use the mic). The manager gets a live snapshot of the team with each message. Instructions are queued in an inbox that `/team` reads at every phase boundary; the team can post back to you with `team.mjs say`.
-- **Human-like voice** — the manager speaks with [Kokoro-82M](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX) (Apache-2.0) running on-device in the browser via kokoro-js (multi-threaded WASM; the server sends cross-origin-isolation headers to enable threads). The ~92 MB model downloads once from Hugging Face and is cached. Voices: Hindi male (default: English spoken in an Indian voice), US/UK male & female, or the instant system voice as fallback.
-- **Hindi** — switch LANG to हिन्दी: the mic listens in Hindi (hi-IN), the manager replies in conversational Hindi (Devanagari), and it's spoken by Kokoro's Hindi voice through a built-in rule-based Hindi→IPA converter (`hindi-g2p.js`, with schwa deletion), since kokoro-js only phonemizes English.
-- **One voice at a time** — only the tab you used last speaks, even across different browsers (the server tracks the active tab).
+- **Manager chat** — type (or dictate with 🎤 in Chrome/Edge) to talk to the manager, who gets a live snapshot of the team with each message. Instructions are queued in an inbox that `/team` reads at every phase boundary; the team can post back to you with `team.mjs say`.
 - **Demo** — click *Watch demo* (or open `/?demo`) to see a simulated run.
 
 The execution graph uses [AmnesiaGraph](https://github.com/turio/AmnesiaGraph)'s normalized task format (`id`, `order`, `title`, `source`, `depends_on`, `verify`) plus an `owner` field, so the same file can be fed to `amnesia init`.
