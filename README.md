@@ -33,7 +33,7 @@ The `/team` skill (`.claude/skills/team/SKILL.md`) runs PLAN → BUILD → TEST 
 
 - **Pixel office** — each agent is a character with its own desk; they walk from the lounge to their desk when they start work, type, and show what they're doing in speech bubbles. The whiteboard shows one sticky note per task.
 - **Progress** — phase tracker, % of tasks done, a dependency graph of the plan (status shown by icon + label), a Gantt-style agent timeline, and a live activity log.
-- **Manager chat** — type or talk (🎤, Web Speech API in Chrome/Edge), optionally hear replies (🔈). The manager gets a live snapshot of the team with each message. Instructions are queued in an inbox that `/team` reads at every phase boundary; the team can post back to you with `team.mjs say`.
+- **Manager chat** — type or talk (🎤, Web Speech API in Chrome/Edge), the manager speaks replies aloud with a talking animation in the office (🔊 to mute, ▶ to replay a message; always on when you use the mic). The manager gets a live snapshot of the team with each message. Instructions are queued in an inbox that `/team` reads at every phase boundary; the team can post back to you with `team.mjs say`.
 - **Demo** — click *Watch demo* (or open `/?demo`) to see a simulated run.
 
 The execution graph uses [AmnesiaGraph](https://github.com/turio/AmnesiaGraph)'s normalized task format (`id`, `order`, `title`, `source`, `depends_on`, `verify`) plus an `owner` field, so the same file can be fed to `amnesia init`.

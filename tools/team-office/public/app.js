@@ -3,7 +3,7 @@ import { renderHeader, renderRoster, renderLegends, renderGraph, renderTimeline,
 import { createDemo } from "./demo.js";
 import { createChat } from "./chat.js";
 
-const chat = createChat();
+const chat = createChat({ onSpeaking: (on, text) => office.setSpeaking(on, text) });
 const office = createOffice({
   canvas: document.getElementById("canvas"),
   overlay: document.getElementById("overlay"),

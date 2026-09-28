@@ -93,6 +93,7 @@ export function createOffice({ canvas, overlay, tip, onSelect }) {
 
   let state = null;
   let now = Date.now();
+  let speech = ""; // text the manager is currently saying out loud
   const chars = {};
   AGENTS.forEach((a, i) => {
     chars[a.id] = { x: LOUNGE[i].x, y: LOUNGE[i].y, mode: "stand", facing: 1, path: [], goal: "lounge", jump: 0, prevState: "idle", placed: false };
@@ -453,7 +454,25 @@ export function createOffice({ canvas, overlay, tip, onSelect }) {
       if (ch.mode !== "sit") items.push({ key: ch.y, draw: () => drawWalker(a.id, t) });
     }
     items.sort((p, q) => p.key - q.key).forEach((i) => i.draw());
+    if (speech) drawSoundWaves(t);
     updateBubbles();
+  }
+
+  // pulsing arcs beside the manager's head while they talk
+  function drawSoundWaves(t) {
+    const ch = chars.manager;
+    const seated = ch.mode === "sit";
+    const hx = seated ? STATIONS.manager.dx + 23 : ch.x + 5;
+    const hy = seated ? STATIONS.manager.dy + 4 : ch.y - 12;
+    const phase = Math.floor(t / 180) % 4;
+    for (let i = 0; i < 3; i++) {
+      if (i > phase) break;
+      const r = 2 + i * 2;
+      const c = i === phase ? "#ffffff" : "#e66767";
+      rect(hx + r, hy - r + 1, 1, 1, c);
+      rect(hx + r + 1, hy - r + 2, 1, r * 2 - 2, c);
+      rect(hx + r, hy + r - 1, 1, 1, c);
+    }
   }
 
   function updateBubbles() {
@@ -462,6 +481,16 @@ export function createOffice({ canvas, overlay, tip, onSelect }) {
       const ag = state?.agents?.[a.id];
       const ch = chars[a.id];
       const st = ag?.state || "idle";
+      if (a.id === "manager" && speech) {
+        const text = "🔊 " + speech;
+        if (b.textContent !== text) b.textContent = text;
+        b.className = "bubble speaking";
+        b.title = speech;
+        b.hidden = false;
+        if (ch.mode === "sit") place(b, STATIONS.manager.dx + 18, STATIONS.manager.dy - 17);
+        else place(b, ch.x, ch.y - 19);
+        continue;
+      }
       if (ch.mode !== "sit" || st === "idle") {
         b.hidden = true;
         continue;
@@ -539,6 +568,9 @@ export function createOffice({ canvas, overlay, tip, onSelect }) {
       state = next;
       syncGoals(first);
       first = false;
+    },
+    setSpeaking(on, text = "") {
+      speech = on ? text.replace(/\s+/g, " ").trim() || "…" : "";
     },
   };
 }
