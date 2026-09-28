@@ -57,7 +57,8 @@ function runSnapshot() {
   } catch {}
   return [
     run
-      ? `Pipeline run: ${run.status.toUpperCase()} — project "${run.project}" (${run.dir}) — task: ${run.task} — started ${t(run.startedAt)}${run.endedAt ? `, ended ${t(run.endedAt)}` : ""}${run.error ? ` — error: ${run.error}` : ""}`
+      ? `Pipeline run: ${run.status.toUpperCase()} — project "${run.project}" (${run.dir}) — task: ${run.task.split("\n")[0]} — started ${t(run.startedAt)}${run.attempts > 1 ? `, attempt ${run.attempts}` : ""}${run.endedAt ? `, ended ${t(run.endedAt)}` : ""}${run.error ? ` — error: ${run.error}` : ""}` +
+        (run.status === "waiting" ? ` — paused by the Claude usage limit; resumes automatically at ${t(run.resumeAt)}, continuing where it left off (the user can ■ Stop it).` : "")
       : "No pipeline run has been started from the office yet.",
     proposal ? `Pending proposal (waiting for the user's confirmation): project "${proposal.project}"${proposal.isNew ? " (new folder)" : ""} — ${proposal.task}` : "No pending proposal.",
     `This repo (Merage Hub, project name "merage-hub"): ${ROOT}`,
@@ -230,19 +231,35 @@ function systemMessage(text) {
   updateChat((c) => c.messages.push(msg("system", text)));
 }
 
+const fmtTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+const fmtIn = (ms) => {
+  const m = Math.max(1, Math.round((ms - Date.now()) / 60000));
+  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m} min`;
+};
+
+// Every run status change lands in the chat and on the manager's board card.
+function onRunEvent(run) {
+  const title = run.task.split("\n")[0].slice(0, 120);
+  const text = {
+    waiting: `⏳ Out of Claude usage — the team paused mid-run (${run.limitMessage}). It will pick up automatically where it left off at ${fmtTime(run.resumeAt)} (in ${fmtIn(run.resumeAt)}). ■ Stop cancels.`,
+    resumed: `▶ Usage limit has reset — the team is back at work on: ${title} (attempt ${run.attempts}).`,
+    finished: `✅ Run finished — ${title}. Files are in ${run.dir}.`,
+    stopped: `■ Run stopped — ${title}.`,
+    failed: `⚠️ Run failed — ${title}.${run.error ? ` ${run.error}` : ""}`,
+  }[run.status];
+  if (!text) return;
+  const extra =
+    (run.summary && ["finished", "failed"].includes(run.status) ? `\n\nTeam lead's last words:\n${run.summary}` : "") +
+    (run.status === "failed" ? `\n\nFull log: ${run.log}` : "");
+  systemMessage(text + extra);
+  const board = { waiting: `Paused until ${fmtTime(run.resumeAt)}`, resumed: "Team is back at work" }[run.status] || `Run ${run.status}`;
+  updateState((s) => setAgent(s, "manager", "waiting", board));
+}
+
 function launch(proposal) {
-  if (isRunning()) return systemMessage("A run is already in progress — stop it (■ in the chat) before starting another.");
+  if (isRunning()) return systemMessage("A run is already in progress or paused until the usage limit resets — stop it (■ in the chat) before starting another.");
   try {
-    startRun({ project: proposal.project, task: proposal.task }, (run) => {
-      const title = run.task.split("\n")[0].slice(0, 120);
-      const how = {
-        finished: `✅ Run finished — ${title}. Files are in ${run.dir}.`,
-        stopped: `■ Run stopped — ${title}.`,
-        failed: `⚠️ Run failed — ${title}.${run.error ? ` ${run.error}` : ""}`,
-      }[run.status];
-      systemMessage(how + (run.summary && run.status !== "stopped" ? `\n\nTeam lead's last words:\n${run.summary}` : "") + (run.status === "failed" ? `\n\nFull log: ${run.log}` : ""));
-      updateState((s) => setAgent(s, "manager", "waiting", `Run ${run.status}`));
-    });
+    startRun({ project: proposal.project, task: proposal.task }, onRunEvent);
     updateChat((c) => {
       c.proposal = null;
       c.messages.push(msg("system", `🚀 Run started: ${proposal.task}\nProject folder: ${proposal.dir}${proposal.isNew ? " (new)" : ""}. The team will post the plan here for your go-ahead before building.`));
@@ -340,7 +357,7 @@ http
     // Clear a stale "busy" flag left by a server that was stopped mid-reply.
     try {
       if (readChat().busy) updateChat((c) => (c.busy = false));
-      recoverRunState();
+      recoverRunState(onRunEvent); // re-arms an automatic resume if a run is waiting for a usage reset
     } catch {}
     console.log(`Team office running at http://localhost:${PORT}`);
   });

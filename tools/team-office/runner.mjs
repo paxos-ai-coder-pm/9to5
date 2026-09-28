@@ -1,5 +1,6 @@
 // Launches the /team pipeline headlessly (`claude -p "/team …"`) when the user confirms a run the manager proposed.
 // New projects get their own sibling folder next to this repo, seeded with the team's agents and /team skill.
+// If a run hits the Claude usage limit it waits and resumes the same session automatically after each reset.
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
@@ -13,6 +14,9 @@ const PROJECTS_ROOT = path.resolve(ROOT, "..");
 const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
 // how every agent calls the office CLI from any project folder (forward slashes work in Git Bash and cmd)
 const T_CMD = `node "${TEAM_CLI.replaceAll("\\", "/")}"`;
+const MAX_ATTEMPTS = 20; // resume at most this many times across usage resets
+const RESUME_BUFFER_MS = 90 * 1000; // start a little after the reset time
+const FALLBACK_WAIT_MS = 30 * 60 * 1000; // if no reset time is known, check back in 30 min
 
 // What an unattended run may do: edit files inside the project folder (acceptEdits is scoped to the working
 // directory) and run project tooling. No git commit/push, no deletes.
@@ -25,6 +29,8 @@ const ALLOWED_TOOLS = [
 
 let child = null;
 let stopping = false;
+let resumeTimer = null;
+let onEvent = null; // (run) => void — called on waiting / resumed / finished / failed / stopped
 
 export function readRun() {
   try {
@@ -37,12 +43,21 @@ function writeRun(run) {
   fs.mkdirSync(DIR, { recursive: true });
   fs.writeFileSync(RUN_FILE, JSON.stringify(run, null, 2));
 }
-export const isRunning = () => !!child;
+const emit = (run) => {
+  try {
+    onEvent?.(run);
+  } catch {}
+};
 
-// A run marked "running" with no live child means the server restarted mid-run.
-export function recoverRunState() {
+// A run occupies the team while it's working or waiting for a usage reset.
+export const isRunning = () => !!child || readRun()?.status === "waiting";
+
+// On server start: re-arm a pending usage-reset resume; a "running" run with no live child was interrupted.
+export function recoverRunState(handler) {
+  if (handler) onEvent = handler;
   const run = readRun();
   if (run?.status === "running" && !child) writeRun({ ...run, status: "interrupted", endedAt: Date.now() });
+  if (run?.status === "waiting") scheduleResume(run);
 }
 
 // "merage-hub" / "." → this repo; otherwise a sibling folder (created if missing).
@@ -82,11 +97,60 @@ function killTree(pid) {
   } catch {}
 }
 
-/**
- * Start a headless /team run. `onEnd(run)` is called when it finishes, fails, or is stopped.
- */
-export function startRun({ project, task }, onEnd) {
-  if (child) throw new Error("A run is already in progress — stop it first or wait for it to finish.");
+// Fallback when the stream carried no resetsAt: parse "resets 10:50pm (America/Los_Angeles)".
+export function parseResetTime(text, now = Date.now()) {
+  const m = String(text || "").match(/resets?\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:\(([\w/+-]+)\))?/i);
+  if (!m) return null;
+  let h = +m[1] % 12;
+  if ((m[3] || "").toLowerCase() === "pm") h += 12;
+  if (!m[3] && +m[1] === 12) h = 12;
+  const min = +(m[2] || 0);
+  const tz = m[4] || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // wall-clock (h:min in tz) → UTC instant; try today and tomorrow in that zone, take the first one in the future
+  const offsetAt = (utcMs) => {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(new Date(utcMs)).map((p) => [p.type, p.value]));
+    return Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute) - Math.floor(utcMs / 60000) * 60000;
+  };
+  try {
+    const today = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(now)).map((p) => [p.type, p.value]));
+    for (let d = 0; d < 2; d++) {
+      const guess = Date.UTC(+today.year, +today.month - 1, +today.day + d, h, min);
+      const t = guess - offsetAt(guess);
+      if (t > now - 60000) return t;
+    }
+  } catch {}
+  return null;
+}
+
+function scheduleResume(run) {
+  clearTimeout(resumeTimer);
+  const wait = Math.max(5000, (run.resumeAt || Date.now()) - Date.now());
+  // setTimeout caps at ~24.8 days; re-check periodically for very long waits
+  resumeTimer = setTimeout(() => (Date.now() >= run.resumeAt - 1000 ? resumeRun() : scheduleResume(readRun())), Math.min(wait, 6 * 3600 * 1000));
+}
+
+function resumeRun() {
+  const run = readRun();
+  if (!run || run.status !== "waiting" || child) return;
+  if ((run.attempts || 1) >= MAX_ATTEMPTS) {
+    const done = { ...run, status: "failed", endedAt: Date.now(), error: `Gave up after ${run.attempts} attempts across usage resets.` };
+    writeRun(done);
+    return emit(done);
+  }
+  const prompt =
+    `Your Claude usage limit has reset — continue the team pipeline exactly where you left off. ` +
+    `First run ${run.tCmd} resume to see the office board (done / active / blocked / ready tasks) and ${run.tCmd} inbox for any new messages from the user; ` +
+    `then carry on with the remaining steps of the /team skill (re-spawn any teammate whose work was cut off, with the plan and what's already done). ` +
+    `Same HEADLESS rules as before: the user isn't watching this terminal, talk to them only via ${run.tCmd} say / inbox. Never git commit or push.`;
+  const next = { ...run, attempts: (run.attempts || 1) + 1, resumedAt: Date.now() };
+  spawnRun(next, prompt, run.sessionId);
+  emit({ ...readRun(), status: "resumed" });
+}
+
+/** Start a headless /team run. `handler(run)` is called on every status change. */
+export function startRun({ project, task }, handler) {
+  if (handler) onEvent = handler;
+  if (isRunning()) throw new Error("A run is already in progress or waiting for a usage reset — stop it first.");
   const p = resolveProject(project);
   prepareProject(p);
 
@@ -99,26 +163,38 @@ export function startRun({ project, task }, onEnd) {
     `- Post the plan summary with T say and wait for the user's "go" before building. Never git commit or push.)`;
 
   const id = new Date().toISOString().replace(/[:.]/g, "-");
-  fs.mkdirSync(LOG_DIR, { recursive: true });
-  const logFile = path.join(LOG_DIR, `${id}.jsonl`);
-  const log = fs.createWriteStream(logFile);
+  const run = { id, project: p.name, dir: p.dir, isNew: p.isNew, task, tCmd, attempts: 1, startedAt: Date.now(), log: path.join(LOG_DIR, `${id}.jsonl`) };
+  spawnRun(run, prompt, null);
+  return readRun();
+}
 
-  const env = claudeEnv({ TEAM_CLI });
+function spawnRun(run, prompt, resumeSessionId) {
+  fs.mkdirSync(LOG_DIR, { recursive: true });
+  const log = fs.createWriteStream(run.log, { flags: "a" }); // resumed attempts append to the same log
   const args = ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits", "--strict-mcp-config", "--allowedTools", ...ALLOWED_TOOLS];
-  child = spawn(CLAUDE_BIN, args, { cwd: p.dir, env, windowsHide: true });
+  if (resumeSessionId) args.push("--resume", resumeSessionId);
+  child = spawn(CLAUDE_BIN, args, { cwd: run.dir, env: claudeEnv({ TEAM_CLI }), windowsHide: true });
   stopping = false;
 
-  const run = { id, project: p.name, dir: p.dir, isNew: p.isNew, task, status: "running", startedAt: Date.now(), pid: child.pid, log: logFile };
-  writeRun(run);
+  const current = { ...run, status: "running", pid: child.pid, resumeAt: undefined, error: undefined, summary: undefined };
+  writeRun(current);
 
-  // record the model each participant actually runs on: "lead" (orchestrator) and every subagent it spawns
   let authError = null;
+  let limit = null; // last rate_limit_event info
   const parser = createStreamParser({
+    // record the model each participant actually runs on: "lead" (orchestrator) and every subagent it spawns
     onModel: (model, agent) => {
       try {
         updateState((s) => setModel(s, agent || "lead", model));
       } catch {}
     },
+    onSession: (id) => {
+      if (id && id !== current.sessionId) {
+        current.sessionId = id;
+        writeRun(current);
+      }
+    },
+    onRateLimit: (info) => (limit = info),
     onRetry: (ev) => {
       if ((ev.error_status === 401 || ev.error_status === 403) && !authError && child) {
         authError = `Authentication failed (HTTP ${ev.error_status}) — sign in with \`claude auth login\` in PowerShell.`;
@@ -126,43 +202,71 @@ export function startRun({ project, task }, onEnd) {
       }
     },
   });
-  let lastResult = null;
   child.stdout.on("data", (d) => {
     log.write(d);
     parser.push(d);
   });
   child.stderr.on("data", (d) => log.write(d));
+
   const finish = (code, err) => {
     if (!child) return;
     child = null;
     log.end();
-    lastResult = parser.end();
+    const result = parser.end();
     if (authError) err = authError;
+    const resultText = String(result?.result || "");
+    const sessionId = result?.session_id || current.sessionId;
+
+    // Out of usage → wait for the reset and resume the same session (keeps the plan, progress and context).
+    const limited =
+      !stopping && !authError &&
+      (result?.api_error_status === 429 || limit?.status === "rejected" || /out of (extra )?usage|usage limit|limit reached/i.test(resultText + " " + (err || "")));
+    if (limited && sessionId) {
+      const resetMs = limit?.resetsAt ? limit.resetsAt * 1000 : parseResetTime(resultText);
+      const waiting = {
+        ...current, sessionId, status: "waiting", pausedAt: Date.now(),
+        resumeAt: (resetMs || Date.now() + FALLBACK_WAIT_MS) + RESUME_BUFFER_MS,
+        limitMessage: resultText || err || "Usage limit reached",
+      };
+      writeRun(waiting);
+      scheduleResume(waiting);
+      return emit(waiting);
+    }
+
     // A clean exit isn't success if the lead never actually started the pipeline (no `T init` during this run).
     const s = readState();
     const pipelineStarted = !!s.task && s.startedAt >= run.startedAt;
-    let status = stopping ? "stopped" : err || code !== 0 || lastResult?.is_error ? "failed" : "finished";
+    let status = stopping ? "stopped" : err || code !== 0 || result?.is_error ? "failed" : "finished";
     if (status === "finished" && !pipelineStarted) {
       status = "failed";
       err = "The team lead ended without starting the pipeline.";
     }
     const done = {
-      ...run, status, endedAt: Date.now(), exitCode: code,
-      error: err || (lastResult?.is_error ? String(lastResult.result).slice(0, 300) : undefined),
-      summary: lastResult?.result ? String(lastResult.result).slice(0, 1500) : undefined, // the lead's final words
+      ...current, sessionId, status, endedAt: Date.now(), exitCode: code,
+      error: err || (result?.is_error ? resultText.slice(0, 300) : undefined),
+      summary: resultText ? resultText.slice(0, 1500) : undefined, // the lead's final words
     };
     writeRun(done);
-    onEnd?.(done);
+    emit(done);
   };
   child.on("error", (e) => finish(-1, e.code === "ENOENT" ? "The Claude CLI (`claude`) isn't on PATH for the office server." : e.message));
   child.on("close", (code) => finish(code));
   child.stdin.end(prompt);
-  return run;
 }
 
 export function stopRun() {
-  if (!child) return false;
-  stopping = true;
-  killTree(child.pid);
-  return true;
+  if (child) {
+    stopping = true;
+    killTree(child.pid);
+    return true;
+  }
+  const run = readRun();
+  if (run?.status === "waiting") {
+    clearTimeout(resumeTimer);
+    const done = { ...run, status: "stopped", endedAt: Date.now() };
+    writeRun(done);
+    emit(done);
+    return true;
+  }
+  return false;
 }

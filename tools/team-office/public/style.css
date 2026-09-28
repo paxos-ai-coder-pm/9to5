@@ -266,6 +266,8 @@ body { padding-bottom: 20px; }
 .run-bar .r-task { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-secondary); }
 .run-bar.running .r-status { color: var(--warning); animation: blink 1s steps(2) infinite; }
 .run-bar.finished .r-status { color: #7ee07e; }
+.run-bar.waiting { background: #2a2410; }
+.run-bar.waiting .r-status { color: var(--warning); }
 .run-bar.failed .r-status, .run-bar.interrupted .r-status { color: #ff8a8a; }
 .run-bar.stopped .r-status { color: var(--text-muted); }
 .chat-log .typing .text::after { content: "▌"; animation: blink .6s steps(2) infinite; }

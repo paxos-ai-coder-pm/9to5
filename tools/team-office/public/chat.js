@@ -84,17 +84,26 @@ export function createChat() {
     const bar = $("runBar");
     const run = chat.run;
     if (!run) return void (bar.hidden = true);
-    const icon = { running: "●", finished: "✓", failed: "✖", stopped: "■", interrupted: "!" }[run.status] || "●";
-    const recent = run.status === "running" || Date.now() - (run.endedAt || 0) < 10 * 60 * 1000;
+    const icon = { running: "●", waiting: "⏳", finished: "✓", failed: "✖", stopped: "■", interrupted: "!" }[run.status] || "●";
+    const active = run.status === "running" || run.status === "waiting";
+    const recent = active || Date.now() - (run.endedAt || 0) < 10 * 60 * 1000;
     bar.hidden = !recent;
     bar.className = "run-bar " + run.status;
-    bar.innerHTML = `<span class="r-status">${icon} RUN ${esc(run.status.toUpperCase())}</span><span class="r-task" title="${esc(run.task)}">${esc(run.project)} · ${esc(run.task)}</span>${
-      run.status === "running" ? `<button class="px-btn small ghost" data-run="stop" title="Stop the team">■ STOP</button>` : ""
+    let label = `${icon} RUN ${run.status.toUpperCase()}`;
+    let detail = `${run.project} · ${run.task.split("\n")[0]}`;
+    if (run.status === "waiting") {
+      const mins = Math.max(0, Math.round((run.resumeAt - Date.now()) / 60000));
+      const at = new Date(run.resumeAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      label = `⏳ PAUSED`;
+      detail = `Out of usage — resumes at ${at} (${mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins} min`})`;
+    } else if (run.attempts > 1 && run.status === "running") detail += ` · attempt ${run.attempts}`;
+    bar.innerHTML = `<span class="r-status">${esc(label)}</span><span class="r-task" title="${esc(run.task)}">${esc(detail)}</span>${
+      active ? `<button class="px-btn small ghost" data-run="stop" title="${run.status === "waiting" ? "Cancel the automatic resume" : "Stop the team"}">■ STOP</button>` : ""
     }`;
   }
 
   async function runAction(action, proposalId) {
-    if (action === "stop" && !confirm("Stop the team's current run?")) return;
+    if (action === "stop" && !confirm(chat.run?.status === "waiting" ? "Cancel the paused run? It won't resume after the usage reset." : "Stop the team's current run?")) return;
     try {
       const res = await fetch("/api/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, proposalId }) });
       if (!res.ok) lastError = (await res.json().catch(() => ({}))).error || `Request failed (${res.status})`;
