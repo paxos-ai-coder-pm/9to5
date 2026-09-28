@@ -164,7 +164,7 @@ async function handleChat(text) {
 
   if (r.error) {
     const loginHint = /log ?in|auth|401/i.test(r.error)
-      ? " To enable live replies, open a terminal, run `claude`, and sign in with /login — then try again."
+      ? " Sign-in can't be done from this chat. Open PowerShell (Start menu → PowerShell), run: claude auth login — approve in the browser, then send your message here again."
       : "";
     updateChat((c) => {
       c.busy = false;
