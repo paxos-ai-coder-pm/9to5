@@ -2,7 +2,7 @@
 //   onText(text)          — the main session's current message so far (resets at each new message)
 //   onModel(model, agent) — model id seen for the main session (agent = null) or a subagent (its subagent_type)
 // Returns the final `result` event from end().
-export function createStreamParser({ onText, onModel } = {}) {
+export function createStreamParser({ onText, onModel, onRetry } = {}) {
   let buf = "";
   let text = "";
   let result = null;
@@ -20,6 +20,7 @@ export function createStreamParser({ onText, onModel } = {}) {
   function handle(ev) {
     const parent = ev.parent_tool_use_id || null;
     if (ev.type === "system" && ev.subtype === "init") model(ev.model);
+    else if (ev.type === "system" && ev.subtype === "api_retry") onRetry?.(ev); // the CLI is retrying a failed API call
     else if (ev.type === "stream_event") {
       if (parent) return;
       const e = ev.event || {};

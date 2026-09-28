@@ -86,10 +86,24 @@ function askManager(text, sessionId) {
       return resolve({ error: `Couldn't start the Claude CLI (${e.message}).` });
     }
     const timer = setTimeout(() => child.kill(), REPLY_TIMEOUT_MS);
+    let authError = null;
     const parser = createStreamParser({
       onText: (text) => (draft = visibleDraft(text)),
       onModel: (model, agent) => !agent && updateState((s) => setModel(s, "manager", model)),
+      // Retrying won't fix a bad login — fail fast instead of silently retrying for minutes.
+      onRetry: (ev) => {
+        if ((ev.error_status === 401 || ev.error_status === 403) && !authError) {
+          authError = `Not logged in (authentication failed, HTTP ${ev.error_status})`;
+          child.kill();
+        }
+      },
     });
+    if (process.env.OFFICE_DEBUG) {
+      console.log("[debug] spawn env keys:", Object.keys(env).filter((k) => /^(ANTHROPIC|CLAUDE|HOME|USERPROFILE|APPDATA|LOCALAPPDATA|NODE|PATH$|XDG|SHELL)/i.test(k)).sort().join(","));
+      child.stdout.on("data", (d) => console.log("[debug] stdout:", String(d).slice(0, 300).replace(/\n/g, " ⏎ ")));
+      child.stderr.on("data", (d) => console.log("[debug] stderr:", String(d).slice(0, 300)));
+      child.on("close", (code) => console.log("[debug] exit", code));
+    }
     child.stdout.on("data", (d) => parser.push(d));
     child.stderr.on("data", (d) => (err += d));
     child.on("error", (e) => {
@@ -99,6 +113,7 @@ function askManager(text, sessionId) {
     child.on("close", () => {
       clearTimeout(timer);
       const r = parser.end();
+      if (authError) return resolve({ error: authError });
       if (!r) return resolve({ error: (err || "No reply (timed out?)").trim().slice(0, 400) });
       if (r.is_error) return resolve({ error: r.result || "The manager hit an error.", sessionId: r.session_id });
       resolve({ text: r.result || "", sessionId: r.session_id });
@@ -155,9 +170,11 @@ async function handleChat(text) {
 
   draft = "";
   let r = await askManager(text, sessionId);
-  // A stale/unknown session id: retry once as a fresh conversation.
-  if (r.error && sessionId && /session|conversation/i.test(r.error)) {
+  // Resuming can fail for reasons that won't fix themselves (unknown session, or history from another model/provider
+  // that the API rejects — e.g. "Invalid signature in thinking block"). Start a fresh conversation once instead.
+  if (r.error && sessionId && !/log ?in|auth|401|rate.?limit|usage limit/i.test(r.error)) {
     draft = "";
+    updateChat((c) => (c.sessionId = null));
     r = await askManager(text, null);
   }
   setTimeout(() => (draft = ""), 1500); // keep the draft briefly so the final message replaces it without a flash

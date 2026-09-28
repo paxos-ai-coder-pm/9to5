@@ -69,8 +69,24 @@ function readJson(file, fallback) {
 function writeJson(file, data) {
   data.updatedAt = Date.now();
   const tmp = file + "." + process.pid + ".tmp";
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
-  fs.renameSync(tmp, file);
+  const body = JSON.stringify(data, null, 2);
+  fs.writeFileSync(tmp, body);
+  // On Windows the rename fails (EPERM/EBUSY) while another process or OneDrive briefly has the file open — retry,
+  // then fall back to writing in place.
+  for (let i = 0; ; i++) {
+    try {
+      fs.renameSync(tmp, file);
+      return;
+    } catch (e) {
+      if (!["EPERM", "EBUSY", "EACCES"].includes(e.code)) throw e;
+      if (i >= 10) {
+        fs.writeFileSync(file, body);
+        fs.rmSync(tmp, { force: true });
+        return;
+      }
+      sleep(30 + i * 20);
+    }
+  }
 }
 
 export const readState = () => {
@@ -110,9 +126,9 @@ export function claudeEnv(extra = {}) {
   delete env.CLAUDECODE;
   // Started from inside a Claude app session (e.g. its preview pane)? That session's private auth token is inherited
   // but isn't valid for the standalone CLI, and it would override your own `claude auth login`. Drop it.
-  if (env.CLAUDE_CODE_ENTRYPOINT) {
-    delete env.CLAUDE_CODE_ENTRYPOINT;
-    delete env.ANTHROPIC_AUTH_TOKEN;
+  // The app also routes its sessions through its own endpoint (ANTHROPIC_BASE_URL), which rejects normal logins.
+  if (env.CLAUDE_CODE_ENTRYPOINT || env.CLAUDE_AGENT_SDK_VERSION) {
+    for (const k of ["CLAUDE_CODE_ENTRYPOINT", "CLAUDE_AGENT_SDK_VERSION", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"]) delete env[k];
   }
   const anthropic = !env.ANTHROPIC_BASE_URL || /api\.anthropic\.com/.test(env.ANTHROPIC_BASE_URL);
   if (anthropic) {

@@ -112,11 +112,18 @@ export function startRun({ project, task }, onEnd) {
   writeRun(run);
 
   // record the model each participant actually runs on: "lead" (orchestrator) and every subagent it spawns
+  let authError = null;
   const parser = createStreamParser({
     onModel: (model, agent) => {
       try {
         updateState((s) => setModel(s, agent || "lead", model));
       } catch {}
+    },
+    onRetry: (ev) => {
+      if ((ev.error_status === 401 || ev.error_status === 403) && !authError && child) {
+        authError = `Authentication failed (HTTP ${ev.error_status}) — sign in with \`claude auth login\` in PowerShell.`;
+        killTree(child.pid);
+      }
     },
   });
   let lastResult = null;
@@ -130,6 +137,7 @@ export function startRun({ project, task }, onEnd) {
     child = null;
     log.end();
     lastResult = parser.end();
+    if (authError) err = authError;
     // A clean exit isn't success if the lead never actually started the pipeline (no `T init` during this run).
     const s = readState();
     const pipelineStarted = !!s.task && s.startedAt >= run.startedAt;
