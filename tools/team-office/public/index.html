@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vikrant's Dev Studio — Agent Office</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <div>
+        <h1>VIKRANT'S DEV STUDIO</h1>
+        <p class="task" id="task">No run in progress</p>
+      </div>
+    </div>
+    <ol class="phases" id="phases" aria-label="Pipeline phase"></ol>
+    <div class="hero" id="hero" aria-live="polite">
+      <div class="hero-num"><span id="pct">0</span><small>%</small></div>
+      <div class="hero-sub" id="heroSub">0 / 0 tasks</div>
+      <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="bar"><i></i></div>
+    </div>
+  </header>
+
+  <div class="banner" id="banner" hidden>
+    <span>☕ The office is quiet — no team run yet. Start one with <code>/team &lt;task&gt;</code></span>
+    <button class="px-btn" id="demoBtn">▶ WATCH DEMO</button>
+  </div>
+  <div class="banner demo" id="demoBanner" hidden>
+    <span>🎮 DEMO MODE — simulated run</span>
+    <button class="px-btn" id="replayBtn">↺ REPLAY</button>
+    <button class="px-btn ghost" id="liveBtn">EXIT DEMO</button>
+  </div>
+
+  <main class="grid">
+    <section class="panel office-panel">
+      <h2>THE OFFICE</h2>
+      <div class="office" id="office">
+        <canvas id="canvas" width="384" height="216"></canvas>
+        <div class="overlay" id="overlay"></div>
+        <div class="tip" id="tip" hidden></div>
+      </div>
+      <ul class="roster" id="roster"></ul>
+    </section>
+
+    <section class="panel graph-panel">
+      <div class="panel-head">
+        <h2>EXECUTION GRAPH <small>AmnesiaGraph format</small></h2>
+        <button class="px-btn small ghost" id="tableBtn" aria-pressed="false">TABLE</button>
+      </div>
+      <ul class="legend" id="legend"></ul>
+      <div class="graph" id="graph"></div>
+      <div class="table-wrap" id="tableWrap" hidden></div>
+    </section>
+
+    <section class="panel timeline-panel">
+      <h2>AGENT TIMELINE</h2>
+      <ul class="legend" id="tlLegend"></ul>
+      <div class="timeline" id="timeline"></div>
+    </section>
+
+    <section class="panel log-panel">
+      <h2>ACTIVITY LOG</h2>
+      <ol class="log" id="log"></ol>
+    </section>
+  </main>
+
+  <button class="chat-fab" id="chatFab" aria-label="Open chat with the manager" hidden>
+    <span class="fab-face" aria-hidden="true"></span>CHAT<span class="badge" id="chatBadge" hidden></span>
+  </button>
+  <aside class="chat" id="chat" aria-label="Chat with the team manager">
+    <header class="chat-head">
+      <span class="fab-face" aria-hidden="true"></span>
+      <div class="chat-title">
+        <h2>MANAGER</h2>
+        <span class="chat-status" id="chatStatus">● online</span>
+      </div>
+      <button class="icon-btn" id="speakBtn" aria-pressed="false" title="Read replies aloud">🔈</button>
+      <button class="icon-btn" id="chatMin" title="Minimize">▁</button>
+    </header>
+    <ol class="chat-log" id="chatLog" aria-live="polite"></ol>
+    <div class="chat-suggest" id="chatSuggest">
+      <button>What's the status?</button>
+      <button>Anything blocked?</button>
+      <button>Who's working on what?</button>
+    </div>
+    <form class="chat-input" id="chatForm">
+      <textarea id="chatText" rows="1" maxlength="4000" placeholder="Message the manager…" aria-label="Message"></textarea>
+      <button type="button" class="icon-btn mic" id="micBtn" title="Speak (voice input)" aria-pressed="false">🎤</button>
+      <button type="submit" class="px-btn send" id="sendBtn" title="Send (Enter)">➤</button>
+    </form>
+  </aside>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

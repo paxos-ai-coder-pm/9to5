@@ -1,0 +1,5 @@
+# team run state (state.json, chat.json, graph.json)
+/.claude/team/
+/.claude/settings.local.json
+node_modules/
+tests/scratch/

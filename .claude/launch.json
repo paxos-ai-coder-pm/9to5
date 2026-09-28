@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "team-office",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tools/team-office/server.mjs", "4400"],
+      "port": 4400
+    }
+  ]
+}
