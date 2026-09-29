@@ -4,11 +4,13 @@ import { createDemo } from "./demo.js";
 import { createChat } from "./chat.js";
 import { createStudio } from "./studio.js";
 import { createPhone } from "./phone.js";
+import { createPortfolio } from "./portfolio.js";
 
 createPhone();
 
 const chat = createChat();
 const studio = createStudio({ chat });
+createPortfolio({ chat });
 const office = createOffice({
   canvas: document.getElementById("canvas"),
   overlay: document.getElementById("overlay"),

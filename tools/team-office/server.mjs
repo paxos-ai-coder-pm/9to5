@@ -7,7 +7,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
-import { spawn, execFile } from "node:child_process";
+import { spawn, execFile, execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { ROOT, STATE_FILE, CHAT_FILE, readState, readChat, updateChat, updateState, setAgent, setModel, configuredModels, summary, claudeEnv, event } from "./lib.mjs";
 import { readRun, readHistory, startRun, stopRun, isRunning, resolveProject, recoverRunState } from "./runner.mjs";
@@ -331,6 +331,88 @@ function runAction(action, proposalId, via) {
   return { error: "unknown action", code: 400 };
 }
 
+// ---- My Projects panel: one card per project (from run history + the current run), with git/GitHub info ----
+const gitCache = new Map(); // dir → { t, info }
+const ghVisibility = new Map(); // "owner/repo" → { t, visibility }
+function git(dir, args) {
+  try {
+    return execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", timeout: 5000, windowsHide: true, stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return null;
+  }
+}
+function gitInfo(dir) {
+  const hit = gitCache.get(dir);
+  if (hit && Date.now() - hit.t < 30000) return hit.info;
+  let info = { repo: false };
+  if (dir && fs.existsSync(path.join(dir, ".git"))) {
+    const remote = git(dir, ["remote", "get-url", "origin"]);
+    const m = remote && remote.match(/github\.com[:/]([^/]+)\/(.+?)(\.git)?$/i);
+    const slug = m ? `${m[1]}/${m[2]}` : null;
+    const ahead = slug ? Number(git(dir, ["rev-list", "--count", "@{u}..HEAD"]) ?? NaN) : NaN;
+    info = {
+      repo: true,
+      github: slug ? `https://github.com/${slug}` : null,
+      slug,
+      lastCommit: git(dir, ["log", "-1", "--format=%ct|%s"]),
+      uncommitted: (git(dir, ["status", "--porcelain"]) || "").split("\n").filter(Boolean).length,
+      unpushed: Number.isFinite(ahead) ? ahead : null,
+    };
+    if (slug) info.visibility = visibilityOf(slug);
+  }
+  gitCache.set(dir, { t: Date.now(), info });
+  return info;
+}
+// public/private via gh (async, cached 10 min); unknown until the first lookup finishes
+function visibilityOf(slug) {
+  const hit = ghVisibility.get(slug);
+  if (!hit || Date.now() - hit.t > 10 * 60 * 1000) {
+    ghVisibility.set(slug, { t: Date.now(), visibility: hit?.visibility || null });
+    execFile("gh", ["repo", "view", slug, "--json", "visibility", "-q", ".visibility"], { timeout: 15000, windowsHide: true }, (err, out) => {
+      ghVisibility.set(slug, { t: Date.now(), visibility: err ? hit?.visibility || null : String(out).trim().toLowerCase() || null });
+    });
+  }
+  return ghVisibility.get(slug).visibility;
+}
+function portfolio() {
+  const run = readRun();
+  const runs = readHistory();
+  if (run && ["running", "waiting"].includes(run.status)) runs.unshift({ ...run, title: run.task.split("\n")[0] });
+  const byDir = new Map();
+  for (const r of runs) {
+    if (!r.dir) continue;
+    const p = byDir.get(r.dir) || { name: r.project, dir: r.dir, runs: 0, latest: r, firstAt: r.startedAt, built: false };
+    p.runs += 1;
+    if (r.status === "finished") p.built = true;
+    p.firstAt = Math.min(p.firstAt, r.startedAt || Infinity);
+    byDir.set(r.dir, p);
+  }
+  return [...byDir.values()].map((p) => {
+    const g = gitInfo(p.dir);
+    const [ct, subject] = (g.lastCommit || "").split(/\|(.*)/s);
+    return {
+      name: p.name,
+      dir: p.dir,
+      exists: fs.existsSync(p.dir),
+      runs: p.runs,
+      // project status: an active run wins; otherwise a project that was ever built successfully counts as built
+      // (a later failed/stopped run is shown as a note, not as the project's status)
+      status: ["running", "waiting"].includes(p.latest.status) ? p.latest.status : p.built ? "finished" : p.latest.status,
+      lastRunNote: p.built && ["failed", "stopped", "interrupted"].includes(p.latest.status) ? `Last run ${p.latest.status}: ${p.latest.title}` : null,
+      latestTitle: p.latest.title,
+      lastActivity: p.latest.endedAt || p.latest.startedAt,
+      resumeAt: p.latest.resumeAt,
+      github: g.github || null,
+      visibility: g.visibility || null,
+      lastCommitAt: ct ? Number(ct) * 1000 : null,
+      lastCommitSubject: subject || null,
+      uncommitted: g.uncommitted ?? null,
+      unpushed: g.unpushed ?? null,
+      isRepo: g.repo,
+    };
+  });
+}
+
 // Short plain-text status for /status on the phone.
 function statusText() {
   const s = readState();
@@ -382,6 +464,8 @@ http
       } catch {}
       return send(res, 200, { ...state, configuredModels: configuredModels(), run: readRun() });
     }
+
+    if (url.pathname === "/api/portfolio") return send(res, 200, { projects: portfolio() });
 
     // Past runs + lessons for the Projects / Lessons tabs.
     if (url.pathname === "/api/overview") {
