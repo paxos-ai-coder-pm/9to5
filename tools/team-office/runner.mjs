@@ -292,7 +292,8 @@ function spawnRun(run, prompt, resumeSessionId) {
     if (status === "finished" && !pipelineStarted) {
       status = "failed";
       err = "The team lead ended without starting the pipeline.";
-    } else if (status === "finished" && s.phase !== "done") {
+    } else if (status === "finished" && s.phase !== "done" && !((s.tasks || []).length && s.tasks.every((t) => t.status === "done"))) {
+      // (all tasks done but the lead forgot `T phase done` still counts as finished)
       // exited cleanly but the board never reached DONE → the work isn't finished
       status = "failed";
       err = `The team lead stopped early (board still at ${String(s.phase).toUpperCase()}, ${(s.tasks || []).filter((t) => t.status === "done").length}/${(s.tasks || []).length} tasks done).`;
