@@ -11,6 +11,9 @@ Stack notes:
 - **Next.js projects:** the installed Next.js may have breaking changes from your training data. Before using any Next.js API, check `node_modules/next/dist/docs/` and heed deprecation notices.
 - **Browser extensions:** Manifest V3 only; request the minimum permissions the plan lists.
 
+## Before you start
+Read `.claude/playbooks/_core.md`, `testing.md`, and every playbook listed in the plan's **Playbooks** section. Apply the lessons the plan mentions. Before reporting, self-review your own diff against `.claude/playbooks/review.md`. Record anything non-obvious you learned with `node tools/team-office/team.mjs lesson "…"`.
+
 ## Rules
 - You will be given the architect's plan. Implement **Work package B only**.
 - Only create/modify the files listed under package B. dev-1 is editing other files at the same time — touching their files causes conflicts. If you genuinely need a change outside your files, stop and report it instead of making it.

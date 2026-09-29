@@ -54,7 +54,28 @@ function writeRun(run) {
   fs.mkdirSync(DIR, { recursive: true });
   fs.writeFileSync(RUN_FILE, JSON.stringify(run, null, 2));
 }
+const HISTORY_FILE = path.join(DIR, "history.json");
+export function readHistory() {
+  try {
+    return JSON.parse(fs.readFileSync(HISTORY_FILE, "utf8"));
+  } catch {
+    return [];
+  }
+}
+// Finished/failed/stopped runs, newest first (for the Projects tab).
+function recordHistory(run) {
+  const entry = {
+    id: run.id, project: run.project, dir: run.dir, title: String(run.task || "").split("\n")[0].slice(0, 200), status: run.status,
+    startedAt: run.startedAt, endedAt: run.endedAt || Date.now(), attempts: run.attempts || 1, allowGithub: !!run.allowGithub,
+    summary: run.summary ? String(run.summary).slice(0, 1200) : undefined, error: run.error,
+  };
+  const list = [entry, ...readHistory().filter((h) => h.id !== run.id)].slice(0, 100);
+  fs.writeFileSync(HISTORY_FILE, JSON.stringify(list, null, 2));
+}
 const emit = (run) => {
+  try {
+    if (["finished", "failed", "stopped"].includes(run.status)) recordHistory(run);
+  } catch {}
   try {
     onEvent?.(run);
   } catch {}
@@ -96,6 +117,11 @@ function prepareProject(p) {
     if (f !== "manager.md") seed(path.join(ROOT, ".claude", "agents", f), path.join(p.dir, ".claude", "agents", f));
   }
   seed(path.join(ROOT, ".claude", "skills", "team", "SKILL.md"), path.join(p.dir, ".claude", "skills", "team", "SKILL.md"));
+  // playbooks (discipline + practice + stack guides); global lessons stay in the studio repo and are read via `T lessons`
+  const pbDir = path.join(ROOT, ".claude", "playbooks");
+  for (const f of fs.existsSync(pbDir) ? fs.readdirSync(pbDir) : []) {
+    if (f.endsWith(".md") && f !== "lessons-global.md") seed(path.join(pbDir, f), path.join(p.dir, ".claude", "playbooks", f));
+  }
   const gi = path.join(p.dir, ".gitignore");
   const cur = fs.existsSync(gi) ? fs.readFileSync(gi, "utf8") : "";
   if (!cur.includes(".claude/team/")) fs.appendFileSync(gi, `${cur && !cur.endsWith("\n") ? "\n" : ""}# team run state\n.claude/team/\ntests/scratch/\n`);

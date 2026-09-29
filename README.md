@@ -42,9 +42,27 @@ The `/team` skill (`.claude/skills/team/SKILL.md`) runs PLAN → BUILD → TEST 
 
 The execution graph uses [AmnesiaGraph](https://github.com/turio/AmnesiaGraph)'s normalized task format (`id`, `order`, `title`, `source`, `depends_on`, `verify`) plus an `owner` field, so the same file can be fed to `amnesia init`.
 
+## Playbooks: disciplined agents with broad stack coverage
+
+A small, focused library instead of dozens of agents: `.claude/playbooks/` (~500 lines total).
+
+- **`_core.md`** — rules every agent follows: research the installed version before using an API, change small and verify each step, evidence before claims (quote the command + output), fix root causes, no destructive actions, honest reports, record lessons.
+- **Practices** — `testing`, `review`, `security`, `debugging`, `api-design`, `database`, `frontend` (a11y/UX), `devops`, `llm-apps`.
+- **Stacks** — TypeScript/Node, React/Next.js (+Vue, Angular, Svelte), Python (Django/FastAPI/Flask), Go, Java/Kotlin (Spring, Ktor, Android), C#/.NET, Rust, Swift/iOS, Flutter/React Native/KMP, C/C++, PHP/Laravel & Ruby/Rails, browser extensions.
+- **The pipeline enforces it:** the architect's plan must name the playbooks and a *Definition of done* (exact commands); every teammate reads them; a **verification gate** runs those commands before review.
+- **Memory:** `T lesson "…"` records project lessons (`.claude/lessons.md`) or global ones (`--global`); `T lessons` is read at the start of every run, so mistakes aren't repeated.
+
+## Friendlier office
+
+- Plain-English **status line** ("Building — 3 of 11 tasks done · dev-1: popup UI").
+- **Needs-your-answer banner**: when the team asks something (`T ask`), a yellow banner + chat buttons let you **✓ Approve** or **✎ Reply** in one click — answers go straight to the team.
+- **Context-aware quick replies** in the chat; manager replies render basic formatting.
+- **Projects** tab (every run, folder path, "how to try it") and **Lessons** tab.
+- **Welcome card** with example requests, **?** help on every panel, optional **desktop notifications** (🔔) and a (❓) tab-title badge.
+
 ## Install into a project
 
-1. Copy `.claude/agents/`, `.claude/skills/team/` and `tools/team-office/` into your repo.
+1. Copy `.claude/agents/`, `.claude/skills/team/`, `.claude/playbooks/` and `tools/team-office/` into your repo.
 2. Add `/.claude/team/` to `.gitignore` (run state lives there).
 3. Add the office to `.claude/launch.json` (see the one in this repo), or run it directly:
    ```bash
@@ -70,6 +88,9 @@ tasks <graph.json>                    load the execution graph
 task <id> <start|done|block|reset|verify> ["reason"]
 log <agent> "<msg>"                   activity log entry
 say <agent> "<msg>"                   post a message into the user's chat
+ask <agent> "<question>"            ask the user something (banner + Approve/Reply)
+lesson "<text>" [--global]           remember something for future runs
+lessons                               print project + global lessons
 inbox                                 print + mark read the user's instructions
 resume                                recover active / ready / blocked work after a context reset
 ```

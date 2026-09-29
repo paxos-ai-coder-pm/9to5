@@ -1,0 +1,234 @@
+// Friendly layer on top of the office: plain-English status, "needs your answer" banner, welcome card,
+// projects/lessons tabs, help tips, and optional desktop notifications.
+import { AGENT_BY_ID, esc, fmtDur } from "./agents.js";
+
+const PHASE_TEXT = {
+  plan: "Planning — the architect is working out the tasks",
+  build: "Building",
+  test: "Testing — the testers are checking the work",
+  fix: "Fixing what the testers found",
+  review: "Final review — the reviewer is checking everything",
+  done: "Done",
+};
+
+export function createStudio({ chat }) {
+  const $ = (id) => document.getElementById(id);
+  let state = {};
+  let mode = "live";
+  let overview = { history: [], lessons: { global: [], projects: [] } };
+  let primed = false;
+  let lastAskT = 0;
+  let lastRunKey = "";
+  let renderedAskKey = "";
+
+  // ---------- plain-English status ----------
+  function headline(s) {
+    const run = s.run;
+    if (mode === "demo") return "🎮 Demo run — this is what a real run looks like";
+    if (s.ask && !s.ask.answered) return `❓ The ${s.ask.agent} needs your answer — see the yellow banner`;
+    if (s.ask?.answered && run?.status === "running") return "✓ Answer sent — the team is picking it up";
+    if (run?.status === "waiting") {
+      const at = new Date(run.resumeAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      return `⏳ Paused by the Claude usage limit — the team resumes automatically at ${at}`;
+    }
+    // an office-launched run knows whether it's really running; without one (a /team run in Claude Code) trust the board
+    const boardActive = !!s.task && s.phase && s.phase !== "done" && s.phase !== "idle";
+    if (run ? run.status === "running" : boardActive) {
+      if (!s.task) return "🚀 Starting up — the team lead is getting ready";
+      const tasks = s.tasks || [];
+      const done = tasks.filter((t) => t.status === "done").length;
+      const working = Object.entries(s.agents || {})
+        .filter(([id, a]) => a.state === "working" && id !== "manager")
+        .map(([id, a]) => `${id}${a.activity ? `: ${a.activity}` : ""}`);
+      const base = s.phase === "build" ? `Building — ${done} of ${tasks.length} tasks done` : PHASE_TEXT[s.phase] || "Working";
+      return working.length ? `${base} · ${working.slice(0, 2).join(" · ")}` : base;
+    }
+    if (run?.status === "finished" && Date.now() - (run.endedAt || 0) < 6 * 3600e3) return `✅ Finished: ${run.project} — ask the manager how to try it`;
+    if (run?.status === "failed" && Date.now() - (run.endedAt || 0) < 6 * 3600e3) return `⚠ The last run stopped with a problem — ask the manager what happened`;
+    return "Ready — tell the manager what to build";
+  }
+
+  // ---------- needs your answer ----------
+  function renderAsk(s) {
+    const ask = s.ask;
+    const show = mode === "live" && ask && (!ask.answered || s.run?.status === "running") && Date.now() - ask.t < 24 * 3600e3;
+    $("askBanner").hidden = !show;
+    document.title = (ask && !ask.answered && mode === "live" ? "(❓) " : "") + "Vikrant's Dev Studio — Agent Office";
+    if (!show) return;
+    const key = `${ask.t}|${ask.answered || ""}`;
+    if (key === renderedAskKey) return; // don't rebuild buttons every tick (would eat clicks)
+    renderedAskKey = key;
+    const a = AGENT_BY_ID[ask.agent];
+    $("askFrom").innerHTML = `<i style="background:${a?.color || "#888"}"></i>${esc(ask.agent.toUpperCase())} ASKS`;
+    $("askText").textContent = ask.text;
+    $("askBanner").classList.toggle("answered", !!ask.answered);
+    $("askActions").innerHTML = ask.answered
+      ? `<span class="ask-sent">✓ Answer sent — waiting for the team</span>`
+      : `<button class="px-btn" id="askApprove">✓ APPROVE</button><button class="px-btn ghost" id="askReply">✎ REPLY</button>`;
+    if (!ask.answered) {
+      $("askApprove").onclick = () => answer("Approved - go ahead.");
+      $("askReply").onclick = () => chat.replyTo(ask);
+    }
+  }
+
+  async function answer(text) {
+    try {
+      await fetch("/api/answer", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
+    } catch {}
+    if (state.ask) state.ask.answered = Date.now();
+    renderAsk(state);
+    chat.refresh();
+  }
+
+  // ---------- welcome ----------
+  function renderWelcome(s) {
+    const first = mode === "live" && !s.task && !s.run && overview.history.length === 0;
+    $("welcome").hidden = !(first && localStorage.getItem("welcomeDismissed") !== "1");
+  }
+  $("welcomeClose").onclick = () => {
+    localStorage.setItem("welcomeDismissed", "1");
+    $("welcome").hidden = true;
+  };
+  $("examples").addEventListener("click", (e) => {
+    if (e.target.tagName === "BUTTON") chat.prefill(e.target.textContent);
+  });
+
+  // ---------- tabs ----------
+  const tabs = { tabLog: "log", tabProjects: "projects", tabLessons: "lessons" };
+  function selectTab(id) {
+    for (const [t, panel] of Object.entries(tabs)) {
+      $(t).setAttribute("aria-selected", String(t === id));
+      $(panel).hidden = t !== id;
+    }
+    localStorage.setItem("tab", id);
+    if (id !== "tabLog") refreshOverview();
+  }
+  for (const t of Object.keys(tabs)) $(t).onclick = () => selectTab(t);
+  selectTab(localStorage.getItem("tab") in tabs ? localStorage.getItem("tab") : "tabLog");
+
+  // ---------- projects & lessons ----------
+  const when = (ms) => new Date(ms).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  function renderProjects() {
+    const list = overview.history;
+    if (!list.length) {
+      $("projects").innerHTML = `<li class="empty-note">Nothing built yet. Finished runs show up here with their folder, so you can find and try them.</li>`;
+      return;
+    }
+    const icon = { finished: "✓", failed: "✖", stopped: "■" };
+    $("projects").innerHTML = list
+      .map(
+        (h) => `<li class="proj ${h.status}">
+          <div class="proj-top"><span class="chip ${h.status === "finished" ? "done" : h.status === "failed" ? "blocked" : "pending"}">${icon[h.status] || "•"}</span>
+            <b>${esc(h.project)}</b><span class="proj-when">${when(h.endedAt || h.startedAt)} · ${fmtDur((h.endedAt || h.startedAt) - h.startedAt)}${h.attempts > 1 ? ` · ${h.attempts} sessions` : ""}</span></div>
+          <div class="proj-title">${esc(h.title)}</div>
+          ${h.error ? `<div class="proj-err">${esc(h.error)}</div>` : ""}
+          <div class="proj-actions">
+            ${h.dir ? `<button class="px-btn small ghost" data-copy="${esc(h.dir)}">📁 COPY FOLDER PATH</button>` : ""}
+            ${h.status === "finished" ? `<button class="px-btn small ghost" data-ask="How do I try ${esc(h.project)}?">▶ HOW TO TRY</button>` : ""}
+            ${h.status === "failed" ? `<button class="px-btn small ghost" data-ask="What went wrong with the ${esc(h.project)} run, and can the team fix it?">↻ ASK ABOUT IT</button>` : ""}
+          </div></li>`,
+      )
+      .join("");
+  }
+  function renderLessons() {
+    const { global, projects } = overview.lessons;
+    if (!global.length && !projects.length) {
+      $("lessons").innerHTML = `<p class="empty-note">After each run the reviewer records what the team learned (gotchas, working commands, conventions). Future runs read these first, so the same mistake isn't made twice.</p>`;
+      return;
+    }
+    const block = (title, lines) => `<h3>${esc(title)}</h3><ul>${lines.slice().reverse().map((l) => `<li>${esc(l)}</li>`).join("")}</ul>`;
+    $("lessons").innerHTML = projects.map((p) => block(`${p.project}`, p.lines)).join("") + (global.length ? block("All projects", global) : "");
+  }
+  document.querySelector(".log-panel").addEventListener("click", async (e) => {
+    const copy = e.target.closest("[data-copy]");
+    if (copy) {
+      try {
+        await navigator.clipboard.writeText(copy.dataset.copy);
+        copy.textContent = "✓ COPIED";
+        setTimeout(() => (copy.textContent = "📁 COPY FOLDER PATH"), 1500);
+      } catch {
+        prompt("Folder path:", copy.dataset.copy);
+      }
+    }
+    const ask = e.target.closest("[data-ask]");
+    if (ask) chat.prefill(ask.dataset.ask, true);
+  });
+  let loading = false;
+  async function refreshOverview() {
+    if (loading) return;
+    loading = true;
+    try {
+      overview = await (await fetch("/api/overview", { cache: "no-store" })).json();
+      renderProjects();
+      renderLessons();
+      renderWelcome(state);
+    } catch {}
+    loading = false;
+  }
+
+  // ---------- help tips ----------
+  const pop = $("helpPop");
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".help");
+    if (!btn) return void (pop.hidden = true);
+    pop.textContent = btn.dataset.help;
+    pop.hidden = false;
+    const r = btn.getBoundingClientRect();
+    pop.style.top = r.bottom + 8 + window.scrollY + "px";
+    pop.style.left = Math.max(8, Math.min(r.right - 300, window.innerWidth - 320)) + window.scrollX + "px";
+  });
+  document.addEventListener("keydown", (e) => e.key === "Escape" && (pop.hidden = true));
+
+  // ---------- notifications ----------
+  const bell = $("notifyBtn");
+  const notifyOn = () => localStorage.getItem("notify") === "on" && "Notification" in window && Notification.permission === "granted";
+  const paintBell = () => {
+    bell.setAttribute("aria-pressed", String(notifyOn()));
+    bell.textContent = notifyOn() ? "🔔" : "🔕";
+    bell.title = notifyOn() ? "Notifications on — click to turn off" : "Notify me when the team needs me or finishes";
+  };
+  bell.onclick = async () => {
+    if (!("Notification" in window)) return alert("This browser doesn't support notifications.");
+    if (notifyOn()) localStorage.setItem("notify", "off");
+    else if ((await Notification.requestPermission()) === "granted") localStorage.setItem("notify", "on");
+    paintBell();
+  };
+  paintBell();
+  function notify(title, body) {
+    if (!notifyOn() || (document.visibilityState === "visible" && document.hasFocus())) return;
+    try {
+      const n = new Notification(title, { body, tag: "devstudio" });
+      n.onclick = () => window.focus();
+    } catch {}
+  }
+  function watchForNotifications(s) {
+    const run = s.run;
+    const runKey = run ? `${run.id}:${run.status}:${run.attempts || 1}` : "";
+    if (primed) {
+      if (s.ask && !s.ask.answered && s.ask.t > lastAskT) notify(`❓ The ${s.ask.agent} needs your answer`, s.ask.text.slice(0, 180));
+      if (runKey && runKey !== lastRunKey && run) {
+        if (run.status === "finished") notify("✅ The team finished", `${run.project}: ${String(run.task).split("\n")[0].slice(0, 120)}`);
+        if (run.status === "failed") notify("⚠ A run stopped with a problem", run.error || run.project);
+        if (run.status === "waiting") notify("⏳ Paused by the usage limit", "The team will resume automatically after the reset.");
+      }
+      if (runKey !== lastRunKey && run && run.status !== "running") refreshOverview();
+    }
+    lastAskT = Math.max(lastAskT, s.ask?.t || 0);
+    lastRunKey = runKey;
+    primed = true;
+  }
+
+  refreshOverview();
+  setInterval(refreshOverview, 30000);
+
+  return {
+    update(s, m = "live") {
+      state = s;
+      mode = m;
+      $("headline").textContent = headline(s);
+      renderAsk(s);
+      renderWelcome(s);
+      if (m === "live") watchForNotifications(s);
+    },
+  };
+}

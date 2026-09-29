@@ -1,6 +1,21 @@
 // Chat dock: talk to the manager by text (or dictate with the mic). Messages persist in .claude/team/chat.json via the server.
 import { AGENT_BY_ID, esc, prettyModel } from "./agents.js";
 
+// Minimal, safe markdown for chat bubbles: escape first, then code blocks, inline code, bold, links to http(s) only.
+function md(text) {
+  const blocks = [];
+  let s = esc(text).replace(/```[\w-]*\n?([\s\S]*?)```/g, (_, code) => {
+    blocks.push(`<pre class="md-code">${code.replace(/\n$/, "")}</pre>`);
+    return `\u0000${blocks.length - 1}\u0000`;
+  });
+  s = s
+    .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/^#{1,4} (.+)$/gm, "<b>$1</b>");
+  return s.replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[+i]);
+}
+
 export function createChat() {
   const $ = (id) => document.getElementById(id);
   const box = $("chat"), log = $("chatLog"), form = $("chatForm"), input = $("chatText");
@@ -39,9 +54,12 @@ export function createChat() {
       log.innerHTML = msgs
         .map((m) => {
           if (m.from === "system") return `<li class="sys"><span class="text">${esc(m.text)}</span></li>`;
-          if (m.from === "user") return `<li class="me"><span class="from">YOU</span><span class="text">${esc(m.text)}</span></li>`;
+          if (m.from === "user") return `<li class="me"><span class="from">${m.answer ? "YOU → TEAM" : "YOU"}</span><span class="text">${esc(m.text)}</span></li>`;
           const a = AGENT_BY_ID[m.from];
-          return `<li class="them"><span class="from"><i style="background:${a?.color || "#888"}"></i>${esc(m.from.toUpperCase())}</span><span class="text">${esc(m.text)}</span>${(m.relays || []).map((r) => `<span class="relay">${esc(r)}</span>`).join("")}${m.proposal ? proposalCard(m.proposal) : ""}</li>`;
+          const openAsk = m.ask && chat.ask && !chat.ask.answered && chat.ask.text === m.text;
+          return `<li class="them${m.ask ? " question" : ""}"><span class="from"><i style="background:${a?.color || "#888"}"></i>${esc(m.from.toUpperCase())}${m.ask ? " · ❓ NEEDS YOUR ANSWER" : ""}</span><span class="text">${md(m.text)}</span>${(m.relays || []).map((r) => `<span class="relay">${esc(r)}</span>`).join("")}${m.proposal ? proposalCard(m.proposal) : ""}${
+            openAsk ? `<div class="q-actions"><button class="px-btn small" data-answer="Approved - go ahead.">✓ APPROVE</button><button class="px-btn small ghost" data-reply="1">✎ REPLY</button></div>` : ""
+          }</li>`;
         })
         .join("");
     }
@@ -54,9 +72,60 @@ export function createChat() {
     status.className = "chat-status" + (chat.busy ? " busy" : lastError ? " off" : "");
     $("chatModel").textContent = chat.managerModel ? `· ${prettyModel(chat.managerModel)}` : "";
     $("chatModel").title = chat.managerModel ? `Manager model: ${chat.managerModel}` : "";
-    sendBtn.disabled = chat.busy;
-    $("chatSuggest").hidden = msgs.length > 0;
+    sendBtn.disabled = chat.busy && !replyAsk;
+    renderChips();
     renderRunBar();
+  }
+
+  // Quick replies that fit the moment.
+  function renderChips() {
+    const run = chat.run;
+    const recent = run && Date.now() - (run.endedAt || 0) < 6 * 3600e3;
+    let chips;
+    if (chat.ask && !chat.ask.answered) chips = [["✓ Approve", "answer:Approved - go ahead."], ["Explain the plan simply", "Explain the plan in simple terms — what will I get?"], ["✎ Reply to the team", "reply"]];
+    else if (run?.status === "running") chips = [["What's happening now?"], ["Anything blocked?"], ["How long will it take?"]];
+    else if (run?.status === "waiting") chips = [["When does it resume?"], ["What's done so far?"]];
+    else if (run?.status === "finished" && recent) chips = [["How do I try it?"], ["Publish it to GitHub"], ["What should we improve next?"]];
+    else if (run?.status === "failed" && recent) chips = [["What went wrong?"], ["Try again"]];
+    else chips = [["Start a new project", "I want to build something new — ask me what I need."], ["Improve Merage Hub", "I want to improve Merage Hub — what could the team work on?"], ["What can the team do?"]];
+    $("chatSuggest").innerHTML = chips.map(([label, action]) => `<button data-chip="${esc(action || label)}">${esc(label)}</button>`).join("");
+  }
+
+  // Reply mode: the next message goes straight to the team as the answer to its question.
+  let replyAsk = null;
+  function setReply(ask) {
+    replyAsk = ask;
+    input.placeholder = ask ? `Reply to the ${ask.agent} (goes straight to the team)…` : "Tell the manager what to build…";
+    form.classList.toggle("replying", !!ask);
+    sendBtn.disabled = false;
+  }
+  async function answer(text) {
+    try {
+      await fetch("/api/answer", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
+    } catch {
+      lastError = "Can't reach the office server.";
+    }
+    setReply(null);
+    poll();
+  }
+  $("chatSuggest").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-chip]");
+    if (!b) return;
+    const a = b.dataset.chip;
+    if (a.startsWith("answer:")) answer(a.slice(7));
+    else if (a === "reply") replyTo(chat.ask);
+    else send(a);
+  });
+  log.addEventListener("click", (e) => {
+    const ans = e.target.closest("[data-answer]");
+    if (ans) answer(ans.dataset.answer);
+    if (e.target.closest("[data-reply]")) replyTo(chat.ask);
+  });
+  function replyTo(ask) {
+    if (!ask) return;
+    setOpen(true);
+    setReply(ask);
+    input.focus();
   }
 
   function renderDraft() {
@@ -139,6 +208,7 @@ export function createChat() {
       primed = true;
       const changed =
         msgs.length !== lastCount || next.busy !== chat.busy || fresh.length > 0 || next.managerModel !== chat.managerModel ||
+        JSON.stringify(next.ask) !== JSON.stringify(chat.ask) ||
         next.proposal?.id !== chat.proposal?.id || JSON.stringify(next.run) !== JSON.stringify(chat.run);
       const draftChanged = next.draft !== chat.draft;
       chat = next;
@@ -160,7 +230,13 @@ export function createChat() {
 
   async function send(text) {
     text = text.trim();
-    if (!text || chat.busy) return;
+    if (!text) return;
+    if (replyAsk) {
+      input.value = "";
+      autosize();
+      return answer(text); // reply mode → straight to the team's inbox
+    }
+    if (chat.busy) return;
     input.value = "";
     autosize();
     chat = { ...chat, busy: true, messages: [...(chat.messages || []), { from: "user", text }] };
@@ -193,10 +269,6 @@ export function createChat() {
     e.preventDefault();
     send(input.value);
   });
-  $("chatSuggest").addEventListener("click", (e) => {
-    if (e.target.tagName === "BUTTON") send(e.target.textContent);
-  });
-
   // ---- dictation (Web Speech API: Chrome, Edge, Safari) — types what you say into the box ----
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let rec = null;
@@ -246,5 +318,21 @@ export function createChat() {
     poll().finally(() => setTimeout(loop, chat.busy ? 250 : 1000));
   })();
 
-  return { open: () => setOpen(true) };
+  // Escape leaves reply mode
+  input.addEventListener("keydown", (e) => e.key === "Escape" && replyAsk && setReply(null));
+
+  return {
+    open: () => setOpen(true),
+    refresh: () => poll(),
+    replyTo,
+    // put text in the box (e.g. from an example or a project card); optionally send it right away
+    prefill(text, sendNow = false) {
+      setOpen(true);
+      setReply(null);
+      if (sendNow && !chat.busy) return send(text);
+      input.value = text;
+      autosize();
+      input.focus();
+    },
+  };
 }

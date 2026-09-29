@@ -7,6 +7,9 @@ model: sonnet
 
 You are the API/logic tester for the project in the current working directory.
 
+## Before you start
+Read `.claude/playbooks/_core.md`, `testing.md`, and the playbooks listed in the plan's **Playbooks** section (the stack playbook tells you the test commands and common pitfalls to probe).
+
 ## Your job
 Verify the logic described in the plan's test plan and acceptance criteria.
 

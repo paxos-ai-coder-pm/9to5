@@ -12,32 +12,69 @@
   <header class="top">
     <div class="brand">
       <span class="logo" aria-hidden="true"></span>
-      <div>
+      <div class="brand-text">
         <h1>VIKRANT'S DEV STUDIO</h1>
-        <p class="task" id="task">No run in progress</p>
+        <p class="headline" id="headline" aria-live="polite">Getting the office ready…</p>
+        <p class="task" id="task" hidden></p>
       </div>
     </div>
     <ol class="phases" id="phases" aria-label="Pipeline phase"></ol>
-    <div class="hero" id="hero" aria-live="polite">
-      <div class="hero-num"><span id="pct">0</span><small>%</small></div>
-      <div class="hero-sub" id="heroSub">0 / 0 tasks</div>
-      <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="bar"><i></i></div>
+    <div class="top-right">
+      <div class="hero" id="hero">
+        <div class="hero-num"><span id="pct">0</span><small>%</small></div>
+        <div class="hero-sub" id="heroSub">0 / 0 tasks</div>
+        <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="bar"><i></i></div>
+      </div>
+      <button class="icon-btn" id="notifyBtn" title="Notify me when the team needs me or finishes" aria-pressed="false">🔔</button>
     </div>
   </header>
 
-  <div class="banner" id="banner" hidden>
-    <span>☕ The office is quiet — no team run yet. Start one with <code>/team &lt;task&gt;</code></span>
-    <button class="px-btn" id="demoBtn">▶ WATCH DEMO</button>
+  <!-- the team is waiting for the user's answer (T ask) -->
+  <div class="ask-banner" id="askBanner" role="alert" hidden>
+    <span class="ask-icon" aria-hidden="true">❓</span>
+    <div class="ask-body">
+      <div class="ask-from" id="askFrom"></div>
+      <div class="ask-text" id="askText"></div>
+    </div>
+    <div class="ask-actions" id="askActions">
+      <button class="px-btn" id="askApprove">✓ APPROVE</button>
+      <button class="px-btn ghost" id="askReply">✎ REPLY</button>
+    </div>
   </div>
+
+  <!-- shown when nothing has been built yet -->
+  <section class="welcome" id="welcome" hidden>
+    <h2>WELCOME TO YOUR DEV STUDIO</h2>
+    <ol class="steps">
+      <li><b>Tell the manager what to build</b> in the chat on the right — a new app, a feature, a bug fix.</li>
+      <li><b>Approve the plan</b> when the architect posts it (one click).</li>
+      <li><b>Watch the team work</b> — devs build, testers check, the reviewer signs off. You'll be notified when it's done.</li>
+    </ol>
+    <div class="examples" id="examples">
+      <span>Try:</span>
+      <button>Build a to-do app with Next.js and SQLite</button>
+      <button>Add dark mode to Merage Hub</button>
+      <button>Write a Python script that renames photos by date</button>
+    </div>
+    <div class="welcome-actions">
+      <button class="px-btn ghost small" id="demoBtn">▶ WATCH A DEMO RUN</button>
+      <button class="px-btn ghost small" id="welcomeClose">DISMISS</button>
+    </div>
+  </section>
+
   <div class="banner demo" id="demoBanner" hidden>
     <span>🎮 DEMO MODE — simulated run</span>
     <button class="px-btn" id="replayBtn">↺ REPLAY</button>
     <button class="px-btn ghost" id="liveBtn">EXIT DEMO</button>
   </div>
+  <div class="banner" id="banner" hidden><span>⚠ Can't reach the office server. Start it with <code>devstudio</code>.</span></div>
 
   <main class="grid">
     <section class="panel office-panel">
-      <h2>THE OFFICE</h2>
+      <div class="panel-head">
+        <h2>THE OFFICE</h2>
+        <button class="help" data-help="Each character is a teammate. They walk to their desk when working; speech bubbles show what they're doing. Hover for details, click the manager to chat. The whiteboard shows one sticky note per task.">?</button>
+      </div>
       <div class="office" id="office">
         <canvas id="canvas" width="384" height="216"></canvas>
         <div class="overlay" id="overlay"></div>
@@ -48,8 +85,11 @@
 
     <section class="panel graph-panel">
       <div class="panel-head">
-        <h2>EXECUTION GRAPH <small>AmnesiaGraph format</small></h2>
-        <button class="px-btn small ghost" id="tableBtn" aria-pressed="false">TABLE</button>
+        <h2>TASK PLAN <small>who does what, in which order</small></h2>
+        <div class="head-actions">
+          <button class="px-btn small ghost" id="tableBtn" aria-pressed="false">LIST VIEW</button>
+          <button class="help" data-help="The architect's plan broken into tasks. Arrows mean 'must finish first'. Green = done, white = in progress, yellow = ready to start, red = blocked. Hover a task for details.">?</button>
+        </div>
       </div>
       <ul class="legend" id="legend"></ul>
       <div class="graph" id="graph"></div>
@@ -57,14 +97,23 @@
     </section>
 
     <section class="panel timeline-panel">
-      <h2>AGENT TIMELINE</h2>
+      <div class="panel-head">
+        <h2>TIMELINE</h2>
+        <button class="help" data-help="When each teammate was working (colored bars), waiting (outlined) or found problems (✖). The strip on top shows the pipeline phase.">?</button>
+      </div>
       <ul class="legend" id="tlLegend"></ul>
       <div class="timeline" id="timeline"></div>
     </section>
 
     <section class="panel log-panel">
-      <h2>ACTIVITY LOG</h2>
+      <div class="panel-head tabs" role="tablist">
+        <button role="tab" class="tab" id="tabLog" aria-selected="true">ACTIVITY</button>
+        <button role="tab" class="tab" id="tabProjects" aria-selected="false">PROJECTS</button>
+        <button role="tab" class="tab" id="tabLessons" aria-selected="false">LESSONS</button>
+      </div>
       <ol class="log" id="log"></ol>
+      <ul class="projects" id="projects" hidden></ul>
+      <div class="lessons" id="lessons" hidden></div>
     </section>
   </main>
 
@@ -82,17 +131,14 @@
     </header>
     <div class="run-bar" id="runBar" hidden></div>
     <ol class="chat-log" id="chatLog" aria-live="polite"></ol>
-    <div class="chat-suggest" id="chatSuggest">
-      <button>What's the status?</button>
-      <button>Anything blocked?</button>
-      <button>Who's working on what?</button>
-    </div>
+    <div class="chat-suggest" id="chatSuggest"></div>
     <form class="chat-input" id="chatForm">
-      <textarea id="chatText" rows="1" maxlength="4000" placeholder="Message the manager…" aria-label="Message"></textarea>
+      <textarea id="chatText" rows="1" maxlength="4000" placeholder="Tell the manager what to build…" aria-label="Message"></textarea>
       <button type="button" class="icon-btn mic" id="micBtn" title="Dictate (types what you say)" aria-pressed="false">🎤</button>
       <button type="submit" class="px-btn send" id="sendBtn" title="Send (Enter)">➤</button>
     </form>
   </aside>
+  <div class="help-pop" id="helpPop" role="tooltip" hidden></div>
 
   <script type="module" src="/app.js"></script>
 </body>

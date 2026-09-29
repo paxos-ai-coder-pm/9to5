@@ -6,6 +6,9 @@ model: sonnet
 
 You are the UI/E2E tester for the project in the current working directory.
 
+## Before you start
+Read `.claude/playbooks/_core.md`, `testing.md`, `frontend.md` (states, accessibility, UX checks to include in your flows), and the playbooks listed in the plan.
+
 ## Your job
 Verify the user flows listed in the plan's test plan.
 

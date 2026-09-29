@@ -9,8 +9,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { ROOT, STATE_FILE, CHAT_FILE, readState, readChat, updateChat, updateState, setAgent, setModel, configuredModels, summary, claudeEnv } from "./lib.mjs";
-import { readRun, startRun, stopRun, isRunning, resolveProject, recoverRunState } from "./runner.mjs";
+import { ROOT, STATE_FILE, CHAT_FILE, readState, readChat, updateChat, updateState, setAgent, setModel, configuredModels, summary, claudeEnv, event } from "./lib.mjs";
+import { readRun, readHistory, startRun, stopRun, isRunning, resolveProject, recoverRunState } from "./runner.mjs";
 import { createStreamParser } from "./stream.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -71,6 +71,13 @@ function runSnapshot() {
         (run.status === "waiting" ? ` — paused by the Claude usage limit; resumes automatically at ${t(run.resumeAt)}, continuing where it left off (the user can ■ Stop it).` : "")
       : "No pipeline run has been started from the office yet.",
     proposal ? `Pending proposal (waiting for the user's confirmation): project "${proposal.project}"${proposal.isNew ? " (new folder)" : ""} — ${proposal.task}` : "No pending proposal.",
+    (() => {
+      const ask = readState().ask;
+      if (!ask) return "The team has no open question for the user.";
+      return ask.answered
+        ? `The user already answered the team's question ("${ask.text.slice(0, 200)}") — the team will pick it up at its next inbox check.`
+        : `The team is WAITING for the user's answer (${ask.agent} asks: "${ask.text.slice(0, 400)}"). Point the user to the yellow banner / ✓ Approve and ✎ Reply buttons, or if they answer you in chat, RELAY it.`;
+    })(),
     `This repo (Merage Hub, project name "merage-hub"): ${ROOT}`,
     githubAccount ? `GitHub CLI (gh) is signed in as: ${githubAccount} — runs you mark with ALLOW: github can create repos and push there.` : "GitHub CLI (gh) is not signed in — publishing runs won't work until the user runs `gh auth login`.",
     `Sibling project folders in ${path.resolve(ROOT, "..")}: ${projects.join(", ") || "(none)"}`,
@@ -293,7 +300,27 @@ http
       try {
         state = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
       } catch {}
-      return send(res, 200, { ...state, configuredModels: configuredModels() });
+      return send(res, 200, { ...state, configuredModels: configuredModels(), run: readRun() });
+    }
+
+    // Past runs + lessons for the Projects / Lessons tabs.
+    if (url.pathname === "/api/overview") {
+      const lessonLines = (file) => {
+        try {
+          return fs.readFileSync(file, "utf8").split("\n").filter((l) => l.startsWith("- ")).map((l) => l.slice(2)).slice(-50);
+        } catch {
+          return [];
+        }
+      };
+      const history = readHistory();
+      const projects = [...new Map(history.map((h) => [h.dir, h])).values()].slice(0, 8);
+      return send(res, 200, {
+        history,
+        lessons: {
+          global: lessonLines(path.join(ROOT, ".claude", "playbooks", "lessons-global.md")),
+          projects: projects.map((h) => ({ project: h.project, dir: h.dir, lines: lessonLines(path.join(h.dir, ".claude", "lessons.md")) })).filter((p) => p.lines.length),
+        },
+      });
     }
 
     if (url.pathname === "/api/chat" && req.method === "GET") {
@@ -301,8 +328,9 @@ http
       try {
         chat = JSON.parse(fs.readFileSync(CHAT_FILE, "utf8"));
       } catch {}
-      const managerModel = readState().models?.manager || configuredModels().manager || "";
-      return send(res, 200, { ...chat, run: readRun(), draft: chat.busy ? draft : "", managerModel });
+      const st = readState();
+      const managerModel = st.models?.manager || configuredModels().manager || "";
+      return send(res, 200, { ...chat, run: readRun(), draft: chat.busy ? draft : "", managerModel, ask: st.ask || null });
     }
 
     // Only accept same-origin JSON posts, so other websites can't drive the manager or launch runs.
@@ -310,6 +338,28 @@ http
       const origin = req.headers.origin;
       return !(origin && new URL(origin).host !== req.headers.host) && String(req.headers["content-type"]).startsWith("application/json");
     };
+
+    // Direct answer to a team question (T ask) — goes straight to the team's inbox, no manager round-trip.
+    if (url.pathname === "/api/answer" && req.method === "POST") {
+      if (!sameOriginJson()) return send(res, 403, { error: "forbidden" });
+      let text;
+      try {
+        text = String(JSON.parse(await readBody(req, 8192)).text || "").trim();
+      } catch {
+        return send(res, 400, { error: "bad request" });
+      }
+      if (!text || text.length > 4000) return send(res, 400, { error: "Answer must be 1–4000 characters." });
+      const ask = readState().ask;
+      updateChat((c) => {
+        c.messages.push(msg("user", text, { answer: true }));
+        c.inbox.push({ id: crypto.randomUUID(), t: Date.now(), text: ask ? `Answer to "${ask.text.slice(0, 200)}": ${text}` : text, read: false });
+      });
+      updateState((s) => {
+        if (s.ask) s.ask.answered = Date.now();
+        event(s, { type: "log", agent: "", msg: `💬 You answered: ${text.slice(0, 120)}` });
+      });
+      return send(res, 200, { ok: true });
+    }
 
     if (url.pathname === "/api/run" && req.method === "POST") {
       if (!sameOriginJson()) return send(res, 403, { error: "forbidden" });

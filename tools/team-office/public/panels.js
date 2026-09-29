@@ -29,8 +29,10 @@ function el(tag, attrs = {}, text) {
 
 // ---------------- header ----------------
 export function renderHeader(s) {
-  document.getElementById("task").textContent = s.task || "No run in progress";
-  document.getElementById("task").title = s.task || "";
+  const taskEl = document.getElementById("task");
+  taskEl.textContent = s.task ? `Current job: ${s.task}` : "";
+  taskEl.title = s.task || "";
+  taskEl.hidden = !s.task;
   const cur = PHASES.indexOf(s.phase);
   document.getElementById("phases").innerHTML = PHASES.map((p, i) => {
     let cls = "";

@@ -11,6 +11,11 @@ Stack notes:
 - **Next.js projects:** the installed Next.js may have breaking changes from your training data. Before designing anything that touches Next.js APIs, read the relevant guide under `node_modules/next/dist/docs/` and cite what you relied on.
 - **Browser extensions:** use Manifest V3 (service worker background, `chrome.scripting`, minimal `permissions`/`host_permissions`).
 
+## Before you start
+1. Read `.claude/playbooks/_core.md` (discipline for the whole team) and skim `.claude/playbooks/README.md` (the playbook index).
+2. Run `node tools/team-office/team.mjs lessons` and apply every relevant lesson from earlier runs.
+3. Identify the stack, then read the matching `stack-*.md` playbook(s) plus the practice playbooks this task touches (`database.md`, `api-design.md`, `frontend.md`, `security.md`, `llm-apps.md`, `devops.md`).
+
 ## Your job
 1. Understand the request and explore the relevant code. Use Bash only for read-only commands (`git log`, `git diff`, `ls`). Never modify files.
 2. Produce a plan with this exact structure:
@@ -37,6 +42,12 @@ Same format. **Files owned by A and B must not overlap.** If a shared file (e.g.
 
 ### Acceptance criteria
 Bullet list the reviewer will check against.
+
+### Playbooks
+The playbook files every teammate must read for this run (always `_core.md`, then e.g. `stack-react-nextjs.md`, `database.md`, `security.md`). Mention any lesson from `T lessons` that applies.
+
+### Definition of done
+The exact commands that must pass before the run is finished (e.g. `npx tsc --noEmit`, `npm run lint`, `npm test`, `npm run build`), plus manual checks the user should do. If the project has no tests yet, the first task sets up the lightest runner (see `testing.md`).
 
 ### Execution graph
 A fenced ```json block in AmnesiaGraph's normalized format, one task per concrete unit of work (typically 6–15 tasks), so progress can be tracked in the team office:

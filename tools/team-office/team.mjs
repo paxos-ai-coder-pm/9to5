@@ -11,7 +11,10 @@
 //   node tools/team-office/team.mjs task <id> <start|done|block|reset|verify> ["reason"]
 //   node tools/team-office/team.mjs log <agent> "<message>"
 //   node tools/team-office/team.mjs say <agent> "<message>"   # post into the user's chat
+//   node tools/team-office/team.mjs ask <agent> "<question>"   # ask the user something that needs an answer (shows a banner + quick buttons)
 //   node tools/team-office/team.mjs inbox                      # print + mark read the user's messages for the team
+//   node tools/team-office/team.mjs lesson "<text>" [--global] # remember something for future runs (project, or all projects)
+//   node tools/team-office/team.mjs lessons                    # print this project's + global lessons
 //   node tools/team-office/team.mjs resume                     # print active / ready / blocked work
 import fs from "node:fs";
 import path from "node:path";
@@ -21,6 +24,8 @@ import {
   ROOT, DIR, STATE_FILE, AGENTS, AGENT_STATES, PHASES,
   emptyState, withLock, readState, writeState, updateState, updateChat, event, setAgent, summary,
 } from "./lib.mjs";
+
+const GLOBAL_LESSONS = path.join(ROOT, ".claude", "playbooks", "lessons-global.md");
 
 function fail(msg) {
   console.error(msg);
@@ -136,6 +141,20 @@ switch (cmd) {
     updateState((s) => event(s, { type: "log", agent, msg: `💬 ${msg}` }));
     break;
   }
+  case "ask": {
+    // A question the user must answer (plan approval, open questions). Shown as a banner with quick-reply buttons;
+    // cleared when the team reads the answer from the inbox.
+    const [agent, question] = args;
+    if (!AGENTS.includes(agent)) fail(`agent must be one of ${AGENTS.join(", ")}`);
+    if (!question) fail('usage: ask <agent> "<question>"');
+    updateChat((c) => c.messages.push({ id: crypto.randomUUID(), t: Date.now(), from: agent, text: question, ask: true }));
+    updateState((s) => {
+      s.ask = { agent, text: question, t: Date.now() };
+      event(s, { type: "log", agent, msg: `❓ ${question}` });
+    });
+    console.log("Question posted. Poll `inbox` for the answer.");
+    break;
+  }
   case "inbox": {
     const unread = updateChat((c) => {
       const u = c.inbox.filter((m) => !m.read);
@@ -143,7 +162,30 @@ switch (cmd) {
       return u;
     });
     if (!unread.length) console.log("Inbox empty — no new instructions from the user.");
+    else updateState((s) => (s.ask = null)); // the user replied → the pending question is answered
     for (const m of unread) console.log(`[${new Date(m.t).toLocaleTimeString()}] ${m.text}`);
+    break;
+  }
+  case "lesson": {
+    const global = args.includes("--global");
+    const text = args.filter((a) => a !== "--global").join(" ").trim();
+    if (!text) fail('usage: lesson "<one specific, actionable line>" [--global]');
+    const file = global ? GLOBAL_LESSONS : path.join(process.cwd(), ".claude", "lessons.md");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    if (!fs.existsSync(file)) fs.writeFileSync(file, global ? "# Lessons for every project\n\n" : "# Lessons learned in this project\n\nRead by the architect at the start of every team run. One line each; newest last.\n\n");
+    fs.appendFileSync(file, `- ${new Date().toISOString().slice(0, 10)}: ${text.replace(/\s+/g, " ")}\n`);
+    updateState((s) => event(s, { type: "log", agent: "", msg: `📝 Lesson${global ? " (global)" : ""}: ${text}` }));
+    console.log(`Recorded in ${file}`);
+    break;
+  }
+  case "lessons": {
+    const show = (label, file) => {
+      if (!fs.existsSync(file)) return console.log(`${label}: none yet`);
+      const lines = fs.readFileSync(file, "utf8").split("\n").filter((l) => l.startsWith("- "));
+      console.log(`${label} (${lines.length}):\n${lines.slice(-40).join("\n") || "  none yet"}`);
+    };
+    show("This project's lessons", path.join(process.cwd(), ".claude", "lessons.md"));
+    show("Global lessons", GLOBAL_LESSONS);
     break;
   }
   case "resume": {
@@ -151,5 +193,5 @@ switch (cmd) {
     break;
   }
   default:
-    console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 16).join("\n").replace(/^\/\/ ?/gm, ""));
+    console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 18).join("\n").replace(/^\/\/ ?/gm, ""));
 }

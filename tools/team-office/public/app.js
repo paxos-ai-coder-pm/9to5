@@ -2,8 +2,10 @@ import { createOffice } from "./office.js";
 import { renderHeader, renderRoster, renderLegends, renderGraph, renderTimeline, renderLog } from "./panels.js";
 import { createDemo } from "./demo.js";
 import { createChat } from "./chat.js";
+import { createStudio } from "./studio.js";
 
 const chat = createChat();
+const studio = createStudio({ chat });
 const office = createOffice({
   canvas: document.getElementById("canvas"),
   overlay: document.getElementById("overlay"),
@@ -22,6 +24,7 @@ function apply(next) {
   renderHeader(state);
   renderGraph(state);
   renderLog(state);
+  studio.update(state, mode);
   tick();
 }
 
@@ -57,13 +60,21 @@ async function poll() {
     const res = await fetch("/api/state", { cache: "no-store" });
     const s = await res.json();
     configuredModels = s.configuredModels || configuredModels;
+    $("banner").hidden = true;
     const empty = !s.task;
-    $("banner").hidden = !empty;
-    const stamp = s.updatedAt || -1;
+    // re-render on board changes and on run status changes (paused / resumed / finished don't touch the board)
+    const stamp = `${s.updatedAt || -1}|${s.run?.status}|${s.run?.attempts}|${s.ask?.answered || s.ask?.t || ""}`;
     if (stamp !== lastStamp) {
       lastStamp = stamp;
-      // Between runs only agent states (e.g. the manager answering chat) and models matter.
-      apply(empty ? { phase: "idle", agents: s.agents || {}, models: s.models || {}, configuredModels, tasks: [], events: [] } : s);
+      // A run that ended without reaching DONE leaves a stale board (phase stuck at e.g. PLAN, agents mid-task).
+      // Show it as idle so nobody looks busy; the tasks and log stay visible for reference.
+      const ended = s.run && !["running", "waiting"].includes(s.run.status);
+      if (!empty && ended && s.phase !== "done") {
+        const agents = Object.fromEntries(Object.entries(s.agents || {}).map(([id, a]) => [id, id === "manager" ? a : { ...a, state: "idle", activity: "" }]));
+        return apply({ ...s, phase: "idle", agents, ask: s.ask?.answered ? null : s.ask });
+      }
+      // Between runs only agent states (e.g. the manager answering chat), models, the run and questions matter.
+      apply(empty ? { phase: "idle", agents: s.agents || {}, models: s.models || {}, run: s.run, ask: s.ask, tasks: [], events: [] } : s);
     }
   } catch {
     $("banner").hidden = false;
@@ -95,4 +106,5 @@ setMode(mode);
 setInterval(() => {
   poll();
   tick();
+  if (mode === "live") studio.update(state, mode); // keeps "resumes at … / in N min" text fresh
 }, 1000);
