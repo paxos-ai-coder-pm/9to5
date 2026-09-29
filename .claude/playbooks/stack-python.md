@@ -1,7 +1,7 @@
 # Python (Django, FastAPI, Flask, scripts)
 
 **Detect:** `pyproject.toml` (uv/poetry/hatch), `requirements*.txt`, `manage.py` (Django), `main.py` with FastAPI.
-**Commands:** env `uv sync` / `python -m venv .venv && pip install -r requirements.txt` · test `pytest -q` · lint/format `ruff check . && ruff format --check .` · types `mypy` or `pyright` if configured. Always run inside the project's virtualenv.
+**Commands:** env `uv sync` / `python -m venv .venv && pip install -r requirements.txt` · test `pytest -q` · lint/format `ruff check . && ruff format --check .` · types `mypy` or `pyright` if configured. Always run inside the project's virtualenv (create `.venv` with `python -m venv .venv`, then use `.venv/Scripts/python` on Windows or `.venv/bin/python`); never `pip install` into the global/system interpreter.
 
 ## Conventions
 - Type hints on public functions; `dataclasses`/Pydantic models for structured data; no bare `except:` — catch specific exceptions.

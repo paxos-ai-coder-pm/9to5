@@ -130,6 +130,11 @@ export function claudeEnv(extra = {}) {
   if (env.CLAUDE_CODE_ENTRYPOINT || env.CLAUDE_AGENT_SDK_VERSION) {
     for (const k of ["CLAUDE_CODE_ENTRYPOINT", "CLAUDE_AGENT_SDK_VERSION", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"]) delete env[k];
   }
+  // A custom endpoint (e.g. a leftover MiniMax URL in the Windows user environment) with no API key/token for it
+  // can't work with a normal `claude auth login` — it only produces 401s. Fall back to Anthropic.
+  if (env.ANTHROPIC_BASE_URL && !/api\.anthropic\.com/.test(env.ANTHROPIC_BASE_URL) && !env.ANTHROPIC_AUTH_TOKEN && !env.ANTHROPIC_API_KEY) {
+    delete env.ANTHROPIC_BASE_URL;
+  }
   const anthropic = !env.ANTHROPIC_BASE_URL || /api\.anthropic\.com/.test(env.ANTHROPIC_BASE_URL);
   if (anthropic) {
     if (env.ANTHROPIC_BASE_URL) delete env.ANTHROPIC_BASE_URL;

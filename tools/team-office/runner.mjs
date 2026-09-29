@@ -23,6 +23,12 @@ const FALLBACK_WAIT_MS = 30 * 60 * 1000; // if no reset time is known, check bac
 const ALLOWED_TOOLS = [
   "Read", "Glob", "Grep", "Edit", "Write", "Agent", "Task", "TodoWrite", "WebFetch", "WebSearch", "Skill",
   "Bash(node:*)", "Bash(npm:*)", "Bash(npx:*)", "Bash(curl:*)", "Bash(sleep:*)",
+  // toolchains for the stacks the playbooks cover (run project code/tests/installs — same trust level as node/npm)
+  "Bash(python:*)", "Bash(python3:*)", "Bash(py:*)", "Bash(pip:*)", "Bash(pip3:*)", "Bash(pytest:*)", "Bash(uv:*)", "Bash(ruff:*)",
+  "Bash(.venv/Scripts/python:*)", "Bash(.venv/Scripts/pip:*)", "Bash(.venv/Scripts/pytest:*)", "Bash(.venv/bin/python:*)", "Bash(.venv/bin/pip:*)", "Bash(.venv/bin/pytest:*)",
+  "Bash(go:*)", "Bash(cargo:*)", "Bash(rustc:*)", "Bash(dotnet:*)", "Bash(java:*)", "Bash(mvn:*)", "Bash(gradle:*)", "Bash(./gradlew:*)",
+  "Bash(flutter:*)", "Bash(dart:*)", "Bash(php:*)", "Bash(composer:*)", "Bash(ruby:*)", "Bash(bundle:*)", "Bash(rails:*)",
+  "Bash(cmake:*)", "Bash(ctest:*)", "Bash(make:*)", "Bash(bun:*)", "Bash(pnpm:*)", "Bash(yarn:*)", "Bash(where:*)", "Bash(which:*)",
   "Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git ls-files:*)", "Bash(git init:*)", "Bash(git add:*)",
   "Bash(cd:*)", "Bash(ls:*)", "Bash(mkdir:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(wc:*)", "Bash(grep:*)", "Bash(find:*)", "Bash(pwd)",
 ];
@@ -36,6 +42,8 @@ const GITHUB_TOOLS = [
 const DENIED_TOOLS = [
   "Bash(git push --force:*)", "Bash(git push -f:*)", "Bash(git push --force-with-lease:*)", "Bash(git push --delete:*)",
   "Bash(git reset --hard:*)", "Bash(gh repo delete:*)", "Bash(gh repo archive:*)", "Bash(gh auth:*)", "Bash(rm:*)",
+  // a run must never change its own permissions or settings
+  "Skill(fewer-permission-prompts)", "Skill(update-config)", "Edit(.claude/settings*.json)", "Write(.claude/settings*.json)",
 ];
 
 let child = null;
@@ -179,6 +187,7 @@ function resumeRun() {
     `First run ${run.tCmd} resume to see the office board (done / active / blocked / ready tasks) and ${run.tCmd} inbox for any new messages from the user; ` +
     `then carry on with the remaining steps of the /team skill (re-spawn any teammate whose work was cut off, with the plan and what's already done). ` +
     `Same HEADLESS rules as before: the user isn't watching this terminal, talk to them only via ${run.tCmd} say / inbox. ` +
+    `If a command is refused by permissions, do NOT try to change settings, permissions, or config and don't hunt for workarounds — tell the user what you need with T say, then continue with everything you can do without it. ` +
     (run.allowGithub ? `GitHub publishing is still allowed for this run as the task describes (no force-push, no deletes).` : `Never git commit or push.`);
   const next = { ...run, attempts: (run.attempts || 1) + 1, resumedAt: Date.now() };
   spawnRun(next, prompt, run.sessionId);
@@ -199,6 +208,7 @@ export function startRun({ project, task, allowGithub = false }, handler) {
     `- Project directory: ${p.dir}${p.isNew ? " — a new, empty project: scaffold it here" : ""}.\n` +
     `- The team office CLI ("T" in the skill) is exactly: ${tCmd} — it lives outside this project; don't look for it. Your first command must be: ${tCmd} init "<one-line task summary>"\n` +
     `- Post the plan summary with T say and wait for the user's "go" before building.\n` +
+    `- If a command is refused by permissions, do NOT try to change settings, permissions, or config and don't hunt for workarounds — tell the user what you need with T say, then continue with everything you can do without it.\n` +
     (allowGithub
       ? `- GITHUB ALLOWED for this run (the user approved it): you may git add/commit, create GitHub repos with \`gh repo create\` and \`git push\` — only what the task asks for. Never force-push, rewrite history, or delete anything on GitHub. Before pushing to a PUBLIC repo, make sure no secrets, tokens, or local absolute paths (e.g. under .claude/) are committed — gitignore .claude/ unless the task says otherwise. Post the resulting repo URL with T say.)`
       : `- Never git commit or push.)`);
@@ -282,6 +292,10 @@ function spawnRun(run, prompt, resumeSessionId) {
     if (status === "finished" && !pipelineStarted) {
       status = "failed";
       err = "The team lead ended without starting the pipeline.";
+    } else if (status === "finished" && s.phase !== "done") {
+      // exited cleanly but the board never reached DONE → the work isn't finished
+      status = "failed";
+      err = `The team lead stopped early (board still at ${String(s.phase).toUpperCase()}, ${(s.tasks || []).filter((t) => t.status === "done").length}/${(s.tasks || []).length} tasks done).`;
     }
     const done = {
       ...current, sessionId, status, endedAt: Date.now(), exitCode: code,
