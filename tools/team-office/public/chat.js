@@ -54,7 +54,7 @@ export function createChat() {
       log.innerHTML = msgs
         .map((m) => {
           if (m.from === "system") return `<li class="sys"><span class="text">${esc(m.text)}</span></li>`;
-          if (m.from === "user") return `<li class="me"><span class="from">${m.answer ? "YOU → TEAM" : "YOU"}</span><span class="text">${esc(m.text)}</span></li>`;
+          if (m.from === "user") return `<li class="me"><span class="from">${m.answer ? "YOU → TEAM" : "YOU"}${m.via === "telegram" ? " · 📱" : ""}</span><span class="text">${esc(m.text)}</span></li>`;
           const a = AGENT_BY_ID[m.from];
           const openAsk = m.ask && chat.ask && !chat.ask.answered && chat.ask.text === m.text;
           return `<li class="them${m.ask ? " question" : ""}"><span class="from"><i style="background:${a?.color || "#888"}"></i>${esc(m.from.toUpperCase())}${m.ask ? " · ❓ NEEDS YOUR ANSWER" : ""}</span><span class="text">${md(m.text)}</span>${(m.relays || []).map((r) => `<span class="relay">${esc(r)}</span>`).join("")}${m.proposal ? proposalCard(m.proposal) : ""}${

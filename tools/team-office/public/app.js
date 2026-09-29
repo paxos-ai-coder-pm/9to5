@@ -3,6 +3,9 @@ import { renderHeader, renderRoster, renderLegends, renderGraph, renderTimeline,
 import { createDemo } from "./demo.js";
 import { createChat } from "./chat.js";
 import { createStudio } from "./studio.js";
+import { createPhone } from "./phone.js";
+
+createPhone();
 
 const chat = createChat();
 const studio = createStudio({ chat });

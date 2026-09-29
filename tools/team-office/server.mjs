@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { ROOT, STATE_FILE, CHAT_FILE, readState, readChat, updateChat, updateState, setAgent, setModel, configuredModels, summary, claudeEnv, event } from "./lib.mjs";
 import { readRun, readHistory, startRun, stopRun, isRunning, resolveProject, recoverRunState } from "./runner.mjs";
 import { createStreamParser } from "./stream.mjs";
+import { createTelegram } from "./telegram.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(HERE, "public");
@@ -182,9 +183,9 @@ function parseDirectives(text) {
   return { body: body.join("\n").trim(), relays, propose, start };
 }
 
-async function handleChat(text) {
+async function handleChat(text, via) {
   const sessionId = updateChat((c) => {
-    c.messages.push(msg("user", text));
+    c.messages.push(msg("user", text, via ? { via } : {}));
     c.busy = true;
     return c.sessionId;
   });
@@ -277,6 +278,85 @@ function onRunEvent(run) {
   updateState((s) => setAgent(s, "manager", "waiting", board));
 }
 
+// ---- the three things a user can do, shared by the web chat and Telegram ----
+// `via` marks where it came from (e.g. "telegram") so the web chat can show it.
+
+function sendUserMessage(text, via) {
+  text = String(text || "").trim();
+  if (!text || text.length > 4000) return { error: "Message must be 1–4000 characters.", code: 400 };
+  if (readChat().busy) return { error: "The manager is still replying — one moment.", code: 409 };
+  handleChat(text, via).catch((e) => {
+    updateChat((c) => {
+      c.busy = false;
+      c.messages.push(msg("system", `Chat error: ${e.message}`));
+    });
+  });
+  return { ok: true };
+}
+
+// Direct answer to the team's open question (T ask) — straight to its inbox, no manager round-trip.
+function answerTeam(text, via) {
+  text = String(text || "").trim();
+  if (!text || text.length > 4000) return { error: "Answer must be 1–4000 characters.", code: 400 };
+  const ask = readState().ask;
+  updateChat((c) => {
+    c.messages.push(msg("user", text, { answer: true, ...(via ? { via } : {}) }));
+    c.inbox.push({ id: crypto.randomUUID(), t: Date.now(), text: ask ? `Answer to "${ask.text.slice(0, 200)}": ${text}` : text, read: false });
+  });
+  updateState((s) => {
+    if (s.ask) s.ask.answered = Date.now();
+    event(s, { type: "log", agent: "", msg: `💬 You answered${via ? ` (${via})` : ""}: ${text.slice(0, 120)}` });
+  });
+  return { ok: true };
+}
+
+function runAction(action, proposalId, via) {
+  const pending = readChat().proposal;
+  const extra = via ? { via } : {};
+  if (action === "start") {
+    if (!pending || pending.id !== proposalId) return { error: "That proposal is no longer pending.", code: 409 };
+    updateChat((c) => c.messages.push(msg("user", "▶ Start", extra)));
+    launch(pending);
+    return { ok: true };
+  }
+  if (action === "dismiss") {
+    if (pending && pending.id === proposalId)
+      updateChat((c) => {
+        c.proposal = null;
+        c.messages.push(msg("user", "Not yet", extra));
+      });
+    return { ok: true };
+  }
+  if (action === "stop") return { ok: stopRun() };
+  return { error: "unknown action", code: 400 };
+}
+
+// Short plain-text status for /status on the phone.
+function statusText() {
+  const s = readState();
+  const run = readRun();
+  const lines = [];
+  if (run?.status === "running") lines.push(`🟢 Working on: ${run.project} — ${run.task.split("\n")[0].slice(0, 160)}`);
+  else if (run?.status === "waiting") lines.push(`⏳ Paused by the usage limit — resumes at ${fmtTime(run.resumeAt)} (in ${fmtIn(run.resumeAt)}).`);
+  else if (run) lines.push(`Last run ${run.status}: ${run.project} — ${run.task.split("\n")[0].slice(0, 120)}`);
+  else lines.push("The team is idle — tell me what to build.");
+  if (run?.status === "running" && s.task) {
+    const done = (s.tasks || []).filter((t) => t.status === "done").length;
+    lines.push(`Phase: ${String(s.phase).toUpperCase()} · ${done}/${(s.tasks || []).length} tasks done`);
+    const working = Object.entries(s.agents || {}).filter(([id, a]) => a.state === "working" && id !== "manager");
+    for (const [id, a] of working) lines.push(`• ${id}: ${a.activity || "working"}`);
+  }
+  if (s.ask && !s.ask.answered) lines.push(`\n❓ The ${s.ask.agent} is waiting for your answer:\n${s.ask.text}`);
+  return lines.join("\n");
+}
+
+const telegram = createTelegram({
+  onText: (text, via) => sendUserMessage(text, via),
+  onAnswer: (text, via) => answerTeam(text, via),
+  onRunAction: (action, id, via) => runAction(action, id, via),
+  statusText,
+});
+
 function launch(proposal) {
   if (isRunning()) return systemMessage("A run is already in progress or paused until the usage limit resets — stop it (■ in the chat) before starting another.");
   try {
@@ -348,17 +428,28 @@ http
       } catch {
         return send(res, 400, { error: "bad request" });
       }
-      if (!text || text.length > 4000) return send(res, 400, { error: "Answer must be 1–4000 characters." });
-      const ask = readState().ask;
-      updateChat((c) => {
-        c.messages.push(msg("user", text, { answer: true }));
-        c.inbox.push({ id: crypto.randomUUID(), t: Date.now(), text: ask ? `Answer to "${ask.text.slice(0, 200)}": ${text}` : text, read: false });
-      });
-      updateState((s) => {
-        if (s.ask) s.ask.answered = Date.now();
-        event(s, { type: "log", agent: "", msg: `💬 You answered: ${text.slice(0, 120)}` });
-      });
-      return send(res, 200, { ok: true });
+      const r = answerTeam(text);
+      return send(res, r.error ? r.code : 200, r);
+    }
+
+    // Phone (Telegram) connection: status, connect with a bot token, new pairing code, disconnect.
+    if (url.pathname === "/api/telegram") {
+      if (req.method === "GET") return send(res, 200, telegram.status());
+      if (req.method !== "POST" || !sameOriginJson()) return send(res, 403, { error: "forbidden" });
+      let body;
+      try {
+        body = JSON.parse(await readBody(req, 2048));
+      } catch {
+        return send(res, 400, { error: "bad request" });
+      }
+      try {
+        if (body.action === "setup") return send(res, 200, await telegram.setup(body.token));
+        if (body.action === "newcode") return send(res, 200, telegram.newPairCode());
+        if (body.action === "disconnect") return send(res, 200, telegram.disconnect());
+      } catch (e) {
+        return send(res, 400, { error: /Unauthorized|401/i.test(e.message) ? "Telegram rejected that token — copy it again from @BotFather." : e.message });
+      }
+      return send(res, 400, { error: "unknown action" });
     }
 
     if (url.pathname === "/api/run" && req.method === "POST") {
@@ -369,25 +460,8 @@ http
       } catch {
         return send(res, 400, { error: "bad request" });
       }
-      const pending = readChat().proposal;
-      if (body.action === "start") {
-        if (!pending || pending.id !== body.proposalId) return send(res, 409, { error: "That proposal is no longer pending." });
-        updateChat((c) => c.messages.push(msg("user", "▶ Start")));
-        launch(pending);
-        return send(res, 200, { ok: true });
-      }
-      if (body.action === "dismiss") {
-        if (pending && pending.id === body.proposalId)
-          updateChat((c) => {
-            c.proposal = null;
-            c.messages.push(msg("user", "Not yet"));
-          });
-        return send(res, 200, { ok: true });
-      }
-      if (body.action === "stop") {
-        return send(res, 200, { ok: stopRun() });
-      }
-      return send(res, 400, { error: "unknown action" });
+      const r = runAction(body.action, body.proposalId);
+      return send(res, r.error ? r.code : 200, r);
     }
 
     if (url.pathname === "/api/chat" && req.method === "POST") {
@@ -398,15 +472,8 @@ http
       } catch {
         return send(res, 400, { error: "bad request" });
       }
-      if (!text || text.length > 4000) return send(res, 400, { error: "Message must be 1–4000 characters." });
-      if (readChat().busy) return send(res, 409, { error: "The manager is still replying — one moment." });
-      handleChat(text).catch((e) => {
-        updateChat((c) => {
-          c.busy = false;
-          c.messages.push(msg("system", `Chat error: ${e.message}`));
-        });
-      });
-      return send(res, 202, { ok: true });
+      const r = sendUserMessage(text);
+      return send(res, r.error ? r.code : 202, r);
     }
 
     const file = path.normalize(path.join(PUBLIC, url.pathname === "/" ? "index.html" : url.pathname));

@@ -59,6 +59,7 @@ A small, focused library instead of dozens of agents: `.claude/playbooks/` (~500
 - **Context-aware quick replies** in the chat; manager replies render basic formatting.
 - **Projects** tab (every run, folder path, "how to try it") and **Lessons** tab.
 - **Welcome card** with example requests, **?** help on every panel, optional **desktop notifications** (🔔) and a (❓) tab-title badge.
+- **📱 Phone (Telegram)** — talk to the manager from anywhere. Create a bot with @BotFather, paste its token in the 📱 panel, tap the one-time pairing link on your phone. Your messages go to the manager; replies, team questions (✓ Approve / ✎ Reply buttons), proposals (▶ Start) and run updates come to your phone. `/status`, `/stop`, `/help`. Long-polling only (no public URL); private to the paired account; token stored in `.claude/team/telegram.json` (gitignored).
 
 ## Install into a project
 

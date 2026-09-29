@@ -365,6 +365,30 @@ body { padding-bottom: 20px; }
 .chat-input.replying textarea { box-shadow: inset 0 0 0 2px var(--warning); }
 .chat-suggest { padding-top: 2px; }
 
+/* ---------- phone (Telegram) modal ---------- */
+#phoneBtn.on { background: var(--good); box-shadow: none; }
+.modal-back { position: fixed; inset: 0; z-index: 50; background: #000b; display: grid; place-items: center; padding: 16px; }
+.modal {
+  width: min(620px, 100%); max-height: 90vh; overflow-y: auto; background: var(--surface-1); padding: 18px 20px;
+  box-shadow: 0 -3px 0 0 var(--warning), 0 3px 0 0 var(--warning), -3px 0 0 0 var(--warning), 3px 0 0 0 var(--warning);
+}
+.modal-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+.modal-head h2 { color: var(--text-primary); margin: 0; }
+.modal p, .modal li { color: var(--text-secondary); line-height: 1.2; }
+.modal b { color: var(--text-primary); }
+.modal a { color: #6da7ec; }
+.modal code { background: #0a0a0a; padding: 0 4px; }
+.m-steps { padding-left: 24px; display: grid; gap: 8px; }
+.m-list { padding-left: 20px; display: grid; gap: 4px; }
+.m-form { display: flex; gap: 8px; margin: 10px 0; }
+.m-form input { flex: 1; font-family: var(--mono); font-size: 19px; background: #0a0a0a; color: var(--text-primary); border: 0; padding: 8px; box-shadow: inset 0 0 0 2px var(--border); }
+.m-form input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--warning); }
+.m-note { font-size: 17px; color: var(--text-muted) !important; }
+.m-error { color: #ff8a8a !important; }
+.m-ok { color: #7ee07e !important; font-size: 21px; }
+.m-wait { color: var(--warning) !important; animation: blink 1.2s steps(2) infinite; }
+.m-link { display: inline-block; margin-top: 4px; font-size: 19px; word-break: break-all; }
+
 @keyframes blink { 50% { opacity: .35; } }
 @keyframes pulse { 50% { stroke: var(--text-muted); } }
 @media (prefers-reduced-motion: reduce) {
