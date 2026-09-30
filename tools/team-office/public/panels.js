@@ -33,10 +33,12 @@ export function renderHeader(s) {
   taskEl.textContent = s.task ? `Current job: ${s.task}` : "";
   taskEl.title = s.task || "";
   taskEl.hidden = !s.task;
-  const cur = PHASES.indexOf(s.phase);
-  document.getElementById("phases").innerHTML = PHASES.map((p, i) => {
+  // FIX only shows up once a fix loop actually happens (always showing it reads as "something will break")
+  const phases = PHASES.filter((p) => p !== "fix" || s.loop || s.phase === "fix");
+  const cur = phases.indexOf(s.phase);
+  document.getElementById("phases").innerHTML = phases.map((p, i) => {
     let cls = "";
-    if (i < cur && !(p === "fix" && !s.loop)) cls = "past";
+    if (i < cur) cls = "past";
     if (i === cur) cls = "now" + (p === "done" ? " done-phase" : "");
     const label = p === "fix" && s.loop ? `FIX ×${s.loop}` : p.toUpperCase();
     return `<li class="${cls}" ${i === cur ? 'aria-current="step"' : ""}>${label}</li>`;

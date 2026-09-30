@@ -1,5 +1,5 @@
 // 8-bit office renderer. Everything is drawn procedurally at 384×216 and scaled up with pixelated rendering.
-import { AGENTS, AGENT_BY_ID, AGENT_STATE, taskStatus, fmtDur, esc, modelFor } from "./agents.js";
+import { AGENTS, AGENT_BY_ID, AGENT_STATE, taskStatus, taskLabel, fmtDur, esc, modelFor } from "./agents.js";
 
 const W = 384;
 const H = 216;
@@ -93,6 +93,7 @@ export function createOffice({ canvas, overlay, tip, onSelect }) {
 
   let state = null;
   let now = Date.now();
+  let simple = true; // friendly names + plain bubbles; false = ids and the agents' own activity text
   const chars = {};
   AGENTS.forEach((a, i) => {
     chars[a.id] = { x: LOUNGE[i].x, y: LOUNGE[i].y, mode: "stand", facing: 1, path: [], goal: "lounge", jump: 0, prevState: "idle", placed: false };
@@ -105,7 +106,7 @@ export function createOffice({ canvas, overlay, tip, onSelect }) {
     const s = STATIONS[a.id];
     const tag = document.createElement("div");
     tag.className = "tag";
-    tag.innerHTML = `<i style="background:${a.color}"></i>${a.id}`;
+    tag.innerHTML = `<i style="background:${a.color}"></i><span>${a.name}</span>`;
     place(tag, s.dx + 18, s.dy + 24);
     overlay.appendChild(tag);
     tags[a.id] = tag;
@@ -466,13 +467,24 @@ export function createOffice({ canvas, overlay, tip, onSelect }) {
         b.hidden = true;
         continue;
       }
-      const text = st === "done" ? "✓ " + (ag.activity || "done") : st === "failed" ? "✖ " + (ag.activity || "issues found") : st === "waiting" ? "… " + (ag.activity || "waiting") : ag.activity || "working…";
+      const text = bubbleText(a, ag, st);
       if (b.textContent !== text) b.textContent = text;
       b.className = "bubble " + st;
       b.hidden = false;
       const s = STATIONS[a.id];
       place(b, s.dx + 18, s.dy - 17);
     }
+  }
+
+  // In the simple view a bubble says what the teammate is doing in plain words (its task's plain title, or its job);
+  // behind the scenes it shows the agent's own activity text ("POST /api/rsvp").
+  function bubbleText(a, ag, st) {
+    if (!simple) return st === "done" ? "✓ " + (ag.activity || "done") : st === "failed" ? "✖ " + (ag.activity || "issues found") : st === "waiting" ? "… " + (ag.activity || "waiting") : ag.activity || "working…";
+    if (st === "done") return "✓ Done";
+    if (st === "failed") return "✖ Found something to fix";
+    if (st === "waiting") return a.id === "manager" ? "… Here for you" : "… Waiting";
+    const task = (state?.tasks || []).find((t) => t.owner === a.id && t.status === "active");
+    return task ? taskLabel(task) : a.id === "manager" ? "Talking to you" : a.job + "…";
   }
 
   // ---------- hover ----------
@@ -504,11 +516,12 @@ export function createOffice({ canvas, overlay, tip, onSelect }) {
     const owned = (state?.tasks || []).filter((t) => t.owner === id);
     const doneN = owned.filter((t) => t.status === "done").length;
     tip.innerHTML =
-      `<b>${esc(a.id)}</b>${esc(a.role)}<br>${meta.icon} ${meta.label}` +
+      (simple ? `<b>${esc(a.name)}</b>${esc(a.job)}` : `<b>${esc(a.id)}</b>${esc(a.role)}`) +
+      `<br>${meta.icon} ${meta.label}` +
       (ag.since ? ` <span class="muted">· ${fmtDur(now - ag.since)}</span>` : "") +
-      (ag.activity ? `<br><span class="muted">${esc(ag.activity)}</span>` : "") +
-      (owned.length ? `<br>Tasks: ${doneN}/${owned.length} done` : "") +
-      (modelFor(state, id) ? `<br><span class="muted">model:</span> ${esc(modelFor(state, id).label)}${modelFor(state, id).actual ? "" : " <span class=\"muted\">(configured)</span>"}` : "") +
+      (ag.activity && !simple ? `<br><span class="muted">${esc(ag.activity)}</span>` : "") +
+      (owned.length ? `<br>${simple ? "Parts" : "Tasks"}: ${doneN}/${owned.length} done` : "") +
+      (modelFor(state, id) && !simple ? `<br><span class="muted">model:</span> ${esc(modelFor(state, id).label)}${modelFor(state, id).actual ? "" : " <span class=\"muted\">(configured)</span>"}` : "") +
       (id === "manager" ? `<br><span class="muted">Click to chat 💬</span>` : "");
     tip.hidden = false;
     const ox = e.clientX - r.left + 14;
@@ -540,6 +553,10 @@ export function createOffice({ canvas, overlay, tip, onSelect }) {
       state = next;
       syncGoals(first);
       first = false;
+    },
+    setSimple(v) {
+      simple = v;
+      for (const a of AGENTS) tags[a.id].querySelector("span").textContent = v ? a.name : a.id;
     },
   };
 }

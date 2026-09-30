@@ -1,40 +1,70 @@
 #!/usr/bin/env node
-// Serves the pixel office UI, the live team state, and the manager chat. No dependencies.
-//   node tools/team-office/server.mjs [port]   (default 4400)
+// Serves the office UI, the live team state, the manager chat, and the project actions (open, undo, share…).
+// No dependencies.
+//   node tools/team-office/server.mjs [port]   (default 4400; 0 = any free port)
 //
 // Chat replies come from the `manager` agent (.claude/agents/manager.md) via the Claude Code CLI in headless mode
 // (`claude -p --agent manager`), so they use your existing Claude Code login. Set CLAUDE_BIN to override the binary.
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
-import { spawn, execFile, execFileSync } from "node:child_process";
+import { spawn, execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { ROOT, STATE_FILE, CHAT_FILE, readState, readChat, updateChat, updateState, setAgent, setModel, configuredModels, summary, claudeEnv, event, signInHint } from "./lib.mjs";
-import { readRun, readHistory, startRun, stopRun, isRunning, resolveProject, recoverRunState, continueAfterAnswer, shutdown } from "./runner.mjs";
+import { ROOT, DIR, STATE_FILE, CHAT_FILE, readState, readChat, updateChat, updateState, setAgent, setModel, configuredModels, summary, claudeEnv, event, signInHint } from "./lib.mjs";
+import { readRun, readHistory, startRun, stopRun, isRunning, recoverRunState, continueAfterAnswer, continueRun, shutdown } from "./runner.mjs";
+import { resolveProject, knownProjects, portfolio, findProject } from "./projects.mjs";
+import { readSettings, updateSettings, projectsRoot, defaultProjectsDir } from "./settings.mjs";
+import { openApp, stopApp, appStatus, stopAllApps, showFiles, captureScreenshot, screenshotPath } from "./apps.mjs";
+import { readManifest, insidePath } from "./manifest.mjs";
+import { restoreCheckpoint } from "./checkpoint.mjs";
+import { zipDirectory } from "./zip.mjs";
+import { checkHealth, CLAUDE_BIN, GH_BIN } from "./health.mjs";
+import { explainFailure, minutesLeft, typicalRunMinutes, fmtMinutes } from "./insights.mjs";
+import { parseDirectives, visibleDraft } from "./directives.mjs";
 import { createStreamParser } from "./stream.mjs";
 import { createTelegram } from "./telegram.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(HERE, "public");
-const PORT = Number(process.argv[2] || process.env.PORT || 4400);
-const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
+const PORT = Number(process.argv[2] ?? process.env.PORT ?? 4400);
 const REPLY_TIMEOUT_MS = 180000;
+const PID_FILE = path.join(DIR, "office.json"); // lets `devstudio status/stop` find this server
 
 // Which GitHub account `gh` is signed in to (shown on publishing proposals and to the manager). Refreshed every 10 min.
 let githubAccount = null;
 function refreshGithubAccount() {
-  execFile("gh", ["api", "user", "--jq", ".login"], { timeout: 15000, windowsHide: true }, (err, out) => {
+  execFile(GH_BIN, ["api", "user", "--jq", ".login"], { timeout: 15000, windowsHide: true }, (err, out) => {
     githubAccount = err ? null : String(out).trim() || null;
   });
 }
 refreshGithubAccount();
 setInterval(refreshGithubAccount, 10 * 60 * 1000).unref();
 
-const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png" };
+// Setup checklist (Claude installed & signed in, git, GitHub, projects folder). Refreshed every 5 min and on demand.
+let health = null;
+async function refreshHealth() {
+  health = await checkHealth({ githubAccount, projectsDir: projectsRoot() });
+  return health;
+}
+refreshHealth().catch(() => {});
+setInterval(() => refreshHealth().catch(() => {}), 5 * 60 * 1000).unref();
+// what stops the manager from replying at all (null = nothing known)
+function chatBlocker() {
+  const c = health?.checks.find((x) => x.id === "claude");
+  const a = health?.checks.find((x) => x.id === "auth");
+  if (c && !c.ok) return "Claude Code isn't installed on this computer yet";
+  if (a && !a.ok && !a.unknown) return "Claude isn't signed in on this computer yet";
+  return null;
+}
+
+const TYPES = {
+  ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png",
+  ".mjs": "text/javascript", ".woff2": "font/woff2", ".json": "application/json", ".txt": "text/plain; charset=utf-8", ".ico": "image/x-icon",
+};
 
 function send(res, code, body, type = "application/json") {
   res.writeHead(code, { "content-type": type, "cache-control": "no-store" });
-  res.end(typeof body === "string" ? body : JSON.stringify(body));
+  res.end(typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
 
 function readBody(req, limit = 16384) {
@@ -49,7 +79,9 @@ function readBody(req, limit = 16384) {
   });
 }
 
+// A chat message. `extra` may carry: proposal, relays, choices, actions [{ kind, … }], details (collapsed text), via.
 const msg = (from, text, extra = {}) => ({ id: crypto.randomUUID(), t: Date.now(), from, text, ...extra });
+const firstLine = (task) => String(task || "").split("\n")[0].slice(0, 120);
 
 function recentEvents(s, n = 12) {
   return (s.events || [])
@@ -60,29 +92,34 @@ function recentEvents(s, n = 12) {
 
 function runSnapshot() {
   const run = readRun();
-  const { proposal } = readChat();
+  const { proposal, queue = [] } = readChat();
   const t = (ms) => new Date(ms).toLocaleTimeString();
-  let projects = [];
-  try {
-    projects = fs.readdirSync(path.resolve(ROOT, ".."), { withFileTypes: true }).filter((d) => d.isDirectory() && !d.name.startsWith(".")).map((d) => d.name);
-  } catch {}
+  const history = readHistory();
+  const typical = ["quick", "standard", "full"].map((sz) => [sz, typicalRunMinutes(history, sz)]).filter(([, m]) => m);
+  const projects = knownProjects().filter((p) => p.dir !== ROOT);
+  const { lightTeam } = readSettings();
   return [
     run
-      ? `Pipeline run: ${run.status.toUpperCase()} — project "${run.project}" (${run.dir}) — task: ${run.task.split("\n")[0]} — started ${t(run.startedAt)}${run.attempts > 1 ? `, attempt ${run.attempts}` : ""}${run.endedAt ? `, ended ${t(run.endedAt)}` : ""}${run.error ? ` — error: ${run.error}` : ""}` +
+      ? `Pipeline run: ${run.status.toUpperCase()} — project "${run.project}" (${run.dir}) — size ${run.size || "standard"} — task: ${firstLine(run.task)} — started ${t(run.startedAt)}${run.attempts > 1 ? `, attempt ${run.attempts}` : ""}${run.endedAt ? `, ended ${t(run.endedAt)}` : ""}${run.error ? ` — error: ${run.error}` : ""}` +
         (run.status === "waiting" ? ` — paused by the Claude usage limit; resumes automatically at ${t(run.resumeAt)}, continuing where it left off (the user can ■ Stop it).` : "") +
-        (run.status === "needs-answer" ? ` — paused because the team's question is unanswered; it continues automatically as soon as the user answers (banner buttons, or RELAY their answer). Nothing is finished yet.` : "")
+        (run.status === "needs-answer" ? ` — paused because the team's question is unanswered; it continues automatically as soon as the user answers (banner buttons, or RELAY their answer). Nothing is finished yet.` : "") +
+        (["failed", "interrupted", "stopped"].includes(run.status) && run.sessionId ? ` — the user can press ↻ Continue to pick it up where it stopped.` : "")
       : "No pipeline run has been started from the office yet.",
-    proposal ? `Pending proposal (waiting for the user's confirmation): project "${proposal.project}"${proposal.isNew ? " (new folder)" : ""} — ${proposal.task}` : "No pending proposal.",
+    proposal ? `Pending proposal (waiting for the user's confirmation): project "${proposal.project}"${proposal.isNew ? " (new folder)" : ""}, size ${proposal.size} — ${proposal.task}` : "No pending proposal.",
+    queue.length ? `Queued runs (start automatically after the current one finishes): ${queue.map((q) => `"${firstLine(q.task)}"`).join(", ")}` : "No queued runs.",
     (() => {
       const ask = readState().ask;
       if (!ask) return "The team has no open question for the user.";
       return ask.answered
         ? `The user already answered the team's question ("${ask.text.slice(0, 200)}") — the team will pick it up at its next inbox check.`
-        : `The team is WAITING for the user's answer (${ask.agent} asks: "${ask.text.slice(0, 400)}"). Point the user to the yellow banner / ✓ Approve and ✎ Reply buttons, or if they answer you in chat, RELAY it.`;
+        : `The team is WAITING for the user's answer (${ask.agent} asks: "${ask.text.slice(0, 400)}"${ask.options ? `; answer buttons: ${ask.options.join(" / ")}` : ""}). Point the user to the yellow banner and its buttons, or if they answer you in chat, RELAY it.`;
     })(),
     `The Dev Studio itself (project name "."): ${ROOT} — only for changes to the studio/office, when the user explicitly asks for that.`,
-    githubAccount ? `GitHub CLI (gh) is signed in as: ${githubAccount} — runs you mark with ALLOW: github can create repos and push there.` : "GitHub CLI (gh) is not signed in — publishing runs won't work until the user runs `gh auth login`.",
-    `Sibling project folders in ${path.resolve(ROOT, "..")}: ${projects.join(", ") || "(none)"}`,
+    `Projects folder: ${projectsRoot()} — a new project is created there as <name>/.`,
+    `Existing projects (use these exact names for changes to them): ${projects.map((p) => p.name).join(", ") || "(none yet)"}`,
+    `Team: ${lightTeam ? "LIGHT team (every teammate on Sonnet — uses less of the Claude plan)" : "normal team (architect and reviewer on Opus)"}.`,
+    typical.length ? `Typical run times so far: ${typical.map(([sz, m]) => `${sz} ${fmtMinutes(m)}`).join(", ")}.` : "No finished runs yet to estimate run times from.",
+    githubAccount ? `GitHub CLI (gh) is signed in as: ${githubAccount} — runs you mark with ALLOW: github can create repos, push and turn on GitHub Pages there.` : "GitHub CLI (gh) is not signed in — publishing runs won't work until the user runs `gh auth login`.",
   ].join("\n");
 }
 
@@ -143,46 +180,8 @@ function askManager(text, sessionId) {
   });
 }
 
-// The reply as it's being written, minus directive lines (and a trailing half-written one).
+// The reply as it's being written (directive lines hidden).
 let draft = "";
-function visibleDraft(text) {
-  const lines = text.split("\n").filter((l) => !/^\s*(RELAY|PROPOSE|START):/.test(l));
-  const last = lines[lines.length - 1]?.trim() || "";
-  if (last && /^[A-Z]{1,7}$/.test(last) && ["RELAY:", "PROPOSE:", "START:"].some((d) => d.startsWith(last))) lines.pop();
-  return lines.join("\n").trimEnd();
-}
-
-// Directive lines the manager appends (hidden from the user):
-//   RELAY: <instruction for the team>        PROPOSE: <project-folder> | <task>        START:
-function parseDirectives(text) {
-  const relays = [];
-  let propose = null;
-  let start = false;
-  const body = [];
-  let inPropose = false; // a PROPOSE brief may continue over several lines, until the next directive
-  let allowGithub = false; // "ALLOW: github" — the proposed run may commit/push (shown on the card; Start = consent)
-  for (const line of text.split("\n")) {
-    const m = line.match(/^\s*(RELAY|PROPOSE|START|ALLOW):\s*(.*)$/);
-    if (m) {
-      inPropose = false;
-      if (m[1] === "ALLOW" && /github/i.test(m[2])) allowGithub = true;
-      if (m[1] === "RELAY" && m[2].trim()) relays.push(m[2].trim());
-      if (m[1] === "START") start = true;
-      if (m[1] === "PROPOSE") {
-        const [project, ...rest] = m[2].split("|");
-        propose = { project: project.trim(), task: rest.join("|").trim() };
-        inPropose = true;
-      }
-    } else if (inPropose) propose.task += "\n" + line;
-    else body.push(line);
-  }
-  if (propose) {
-    propose.task = propose.task.trim();
-    propose.allowGithub = allowGithub;
-    if (!propose.task) propose = null;
-  }
-  return { body: body.join("\n").trim(), relays, propose, start };
-}
 
 async function handleChat(text, via) {
   const sessionId = updateChat((c) => {
@@ -204,27 +203,28 @@ async function handleChat(text, via) {
   setTimeout(() => (draft = ""), 1500); // keep the draft briefly so the final message replaces it without a flash
 
   if (r.error) {
-    const loginHint = /log ?in|auth|401/i.test(r.error) ? ` Sign-in can't be done from this chat. ${signInHint("send your message here again")}` : "";
+    const auth = /log ?in|auth|401/i.test(r.error);
+    const loginHint = auth ? ` Sign-in can't be done from this chat. ${signInHint("send your message here again")}` : "";
     // Only queue it for the team if a run is there to read it — otherwise it would surface in some later, unrelated run.
     const listening = teamListening();
     updateChat((c) => {
       c.busy = false;
-      c.messages.push(msg("system", `The manager couldn't reply: ${r.error}.${loginHint} ${listening ? "Your message was saved to the team inbox, so the team will still see it." : "Your message wasn't delivered — send it again once the manager is back."}`));
+      c.messages.push(msg("system", `The manager couldn't reply: ${r.error}.${loginHint} ${listening ? "Your message was saved to the team inbox, so the team will still see it." : "Your message wasn't delivered — send it again once the manager is back."}`, auth ? { actions: [{ kind: "setup" }] } : {}));
       if (listening) c.inbox.push({ id: crypto.randomUUID(), t: Date.now(), text, read: false });
     });
     updateState((s) => setAgent(s, "manager", "failed", "Chat offline"));
+    if (auth) refreshHealth().catch(() => {});
     return;
   }
 
-  const { body, relays, propose, start } = parseDirectives(r.text);
+  const { body, relays, propose, start, choices } = parseDirectives(r.text);
 
   // PROPOSE → a run card the user can confirm; the manager decides the project folder and task.
   let proposal = null;
   let notice = null;
   if (propose) {
     try {
-      const p = resolveProject(propose.project);
-      proposal = { id: crypto.randomUUID(), t: Date.now(), project: p.name, dir: p.dir, isNew: p.isNew, task: propose.task, allowGithub: !!propose.allowGithub, githubAccount: githubAccount || null };
+      proposal = makeProposal(propose);
     } catch (e) {
       notice = `Couldn't prepare that run: ${e.message}`;
     }
@@ -233,7 +233,7 @@ async function handleChat(text, via) {
   updateChat((c) => {
     c.busy = false;
     c.sessionId = r.sessionId || c.sessionId;
-    c.messages.push(msg("manager", body || "(no reply)", { ...(relays.length ? { relays } : {}), ...(proposal ? { proposal } : {}) }));
+    c.messages.push(msg("manager", body || "(no reply)", { ...(relays.length ? { relays } : {}), ...(proposal ? { proposal } : {}), ...(choices ? { choices } : {}) }));
     if (proposal) c.proposal = proposal;
     if (notice) c.messages.push(msg("system", notice));
     for (const t of relays) c.inbox.push({ id: crypto.randomUUID(), t: Date.now(), text: t, read: false });
@@ -251,8 +251,16 @@ async function handleChat(text, via) {
   }
 }
 
-function systemMessage(text) {
-  updateChat((c) => c.messages.push(msg("system", text)));
+function makeProposal({ project, task, allowGithub = false, size = "standard" }) {
+  const p = resolveProject(project);
+  return {
+    id: crypto.randomUUID(), t: Date.now(), project: p.name, dir: p.dir, isNew: p.isNew, foreign: p.foreign, task,
+    allowGithub: !!allowGithub, githubAccount: githubAccount || null, size, estimate: typicalRunMinutes(readHistory(), size),
+  };
+}
+
+function systemMessage(text, extra = {}) {
+  updateChat((c) => c.messages.push(msg("system", text, extra)));
 }
 
 // Is a team run there to read the inbox? An office run (working, paused for usage, or paused for an answer) or a
@@ -269,36 +277,84 @@ const fmtIn = (ms) => {
   return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m} min`;
 };
 
-// Every run status change lands in the chat and on the manager's board card.
+// Every run status change lands in the chat (with next-step buttons) and on the manager's board card.
 function onRunEvent(run) {
-  const title = run.task.split("\n")[0].slice(0, 120);
-  const text = {
-    waiting: `⏳ Out of Claude usage — the team paused mid-run (${run.limitMessage}). It will pick up automatically where it left off at ${fmtTime(run.resumeAt)} (in ${fmtIn(run.resumeAt)}). ■ Stop cancels.`,
-    "needs-answer": `⏸ The team paused because it's waiting for your answer — nothing has been built yet. Answer with ✓ Approve / ✎ Reply (or just tell me) and it carries on right where it stopped.`,
-    resumed:
-      run.reason === "answer"
-        ? `▶ Got your answer — the team is back at work on: ${title}.`
-        : `▶ Usage limit has reset — the team is back at work on: ${title} (attempt ${run.attempts}).`,
-    finished: `✅ Run finished — ${title}. Files are in ${run.dir}.`,
-    stopped: `■ Run stopped — ${title}.`,
-    failed: `⚠️ Run failed — ${title}.${run.error ? ` ${run.error}` : ""}`,
-  }[run.status];
-  if (!text) return;
-  const extra =
-    (run.summary && ["finished", "failed"].includes(run.status) ? `\n\nTeam lead's last words:\n${run.summary}` : "") +
-    (run.status === "failed" ? `\n\nFull log: ${run.log}` : "");
-  systemMessage(text + extra);
+  const title = firstLine(run.task);
+  const project = findProjectByDir(run.dir);
+  if (run.status === "finished") {
+    const s = readState();
+    const reported = s.report && s.report.t >= run.startedAt;
+    const { manifest } = readManifest(run.dir);
+    const canOpen = !!manifest || fs.existsSync(path.join(run.dir, "index.html"));
+    systemMessage(`✅ Finished: ${title}.${reported ? "" : canOpen ? " Press ▶ Open to try it." : " Ask me how to try it."}`, {
+      actions: [...(canOpen && project ? [{ kind: "open", id: project.id }] : []), ...(project ? [{ kind: "change", id: project.id, name: project.name }] : [])],
+      ...(run.summary && !reported ? { details: `Team lead's last words:\n${run.summary}` } : {}),
+    });
+    // a picture of the result for the project card (if a browser is available and the team didn't leave one)
+    if (project && manifest && ["web", "static"].includes(manifest.kind) && !(manifest.screenshot && fs.existsSync(path.join(run.dir, manifest.screenshot))))
+      captureScreenshot(project).catch(() => {});
+    startNextQueued(true);
+  } else if (["failed", "interrupted", "stopped"].includes(run.status)) {
+    const { reason, actions } = explainFailure(run);
+    const text = run.status === "stopped" ? `■ Stopped: ${title}.` : `⚠️ ${title} — ${reason}`;
+    systemMessage(text, {
+      actions: actions.map((kind) => ({ kind, runId: run.id, ...(kind === "ask" ? { text: `What went wrong with "${title}", and can the team fix it?` } : {}) })),
+      ...(run.status !== "stopped" ? { details: [run.error, run.summary && `Team lead's last words:\n${run.summary}`, run.log && `Full log: ${run.log}`].filter(Boolean).join("\n\n") } : {}),
+    });
+    startNextQueued(false);
+  } else {
+    const text = {
+      waiting: `⏳ Out of Claude usage — the team paused mid-run (${run.limitMessage}). It will pick up automatically where it left off at ${fmtTime(run.resumeAt)} (in ${fmtIn(run.resumeAt)}). ■ Stop cancels.`,
+      "needs-answer": `⏸ The team paused because it's waiting for your answer — nothing has been built yet. Answer the question above (or just tell me) and it carries on right where it stopped.`,
+      resumed: {
+        answer: `▶ Got your answer — the team is back at work on: ${title}.`,
+        continue: `↻ Continuing: ${title} — the team picks up where it stopped.`,
+        usage: `▶ Usage limit has reset — the team is back at work on: ${title} (attempt ${run.attempts}).`,
+      }[run.reason || "usage"],
+    }[run.status];
+    if (text) systemMessage(text);
+  }
   const board = { waiting: `Paused until ${fmtTime(run.resumeAt)}`, "needs-answer": "Waiting for your answer", resumed: "Team is back at work" }[run.status] || `Run ${run.status}`;
   updateState((s) => setAgent(s, "manager", "waiting", board));
 }
 
-// ---- the three things a user can do, shared by the web chat and Telegram ----
+function findProjectByDir(dir) {
+  const card = portfolio({ showHidden: true }).find((p) => p.dir === path.resolve(dir));
+  return card ? { id: card.id, name: card.name, dir: card.dir } : null;
+}
+
+// After a run ends: a finished run starts the next queued one; otherwise the next one waits for the user's ▶ Start.
+function startNextQueued(auto) {
+  const next = updateChat((c) => (c.queue?.length ? c.queue.shift() : null));
+  if (!next) return;
+  if (auto) {
+    systemMessage(`⏭ Starting the next queued run: ${firstLine(next.task)}`);
+    setTimeout(() => launch(next), 1500);
+  } else {
+    updateChat((c) => {
+      c.proposal = next;
+      c.messages.push(msg("system", "Next in line — press ▶ Start when you're ready.", { proposal: next }));
+    });
+  }
+}
+
+// ---- the things a user can do, shared by the web chat and Telegram ----
 // `via` marks where it came from (e.g. "telegram") so the web chat can show it.
 
-function sendUserMessage(text, via) {
+async function sendUserMessage(text, via) {
   text = String(text || "").trim();
   if (!text || text.length > 4000) return { error: "Message must be 1–4000 characters.", code: 400 };
   if (readChat().busy) return { error: "The manager is still replying — one moment.", code: 409 };
+  // Known not to work (Claude missing / signed out)? Say so right away instead of failing minutes later.
+  if (chatBlocker()) await refreshHealth().catch(() => {});
+  const blocker = chatBlocker();
+  if (blocker) {
+    updateChat((c) => {
+      c.messages.push(msg("user", text, via ? { via } : {}));
+      c.messages.push(msg("system", `The manager can't reply yet: ${blocker}. The setup checklist at the top of the page shows how to fix it — it takes a minute. Then send your message again.`, { actions: [{ kind: "setup" }] }));
+    });
+    return { ok: true, blocked: true };
+  }
   handleChat(text, via).catch((e) => {
     updateChat((c) => {
       c.busy = false;
@@ -325,12 +381,12 @@ function answerTeam(text, via) {
   return { ok: true };
 }
 
-function runAction(action, proposalId, via) {
+function runAction(action, { proposalId, runId, index } = {}, via) {
   const pending = readChat().proposal;
   const extra = via ? { via } : {};
   if (action === "start") {
     if (!pending || pending.id !== proposalId) return { error: "That proposal is no longer pending.", code: 409 };
-    updateChat((c) => c.messages.push(msg("user", "▶ Start", extra)));
+    updateChat((c) => c.messages.push(msg("user", isRunning() ? "⏭ Queue it" : "▶ Start", extra)));
     launch(pending);
     return { ok: true };
   }
@@ -343,90 +399,101 @@ function runAction(action, proposalId, via) {
     return { ok: true };
   }
   if (action === "stop") return { ok: stopRun() };
+  if (action === "continue") {
+    try {
+      continueRun(String(runId || ""));
+      updateChat((c) => c.messages.push(msg("user", "↻ Continue", extra)));
+      return { ok: true };
+    } catch (e) {
+      return { error: e.message, code: 409 };
+    }
+  }
+  if (action === "retry") {
+    // the same request as a fresh proposal: pressing ▶ Start again is the consent (incl. any GitHub permission)
+    const cur = readRun();
+    const r = cur?.id === runId ? cur : readHistory().find((h) => h.id === runId);
+    if (!r) return { error: "That run isn't known any more.", code: 404 };
+    try {
+      const proposal = makeProposal({ project: r.dir === ROOT ? "." : r.project, task: r.task || r.title, allowGithub: r.allowGithub, size: r.size });
+      updateChat((c) => {
+        c.proposal = proposal;
+        c.messages.push(msg("user", "↻ Try again", extra));
+        c.messages.push(msg("system", "Here's the same request again — press ▶ Start when you're ready.", { proposal }));
+      });
+      return { ok: true };
+    } catch (e) {
+      return { error: e.message, code: 400 };
+    }
+  }
+  if (action === "unqueue") {
+    const removed = updateChat((c) => (Number.isInteger(index) && c.queue?.[index] ? c.queue.splice(index, 1)[0] : null));
+    return removed ? { ok: true } : { error: "That run isn't in the queue.", code: 404 };
+  }
   return { error: "unknown action", code: 400 };
 }
 
-// ---- My Projects panel: one card per project (from run history + the current run), with git/GitHub info ----
-const gitCache = new Map(); // dir → { t, info }
-const ghVisibility = new Map(); // "owner/repo" → { t, visibility }
-function git(dir, args) {
-  try {
-    return execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", timeout: 5000, windowsHide: true, stdio: ["ignore", "pipe", "ignore"] }).trim();
-  } catch {
-    return null;
+// ---- My Projects actions ----
+async function projectAction(body) {
+  const p = findProject(body.id);
+  if (!p) return { error: "That project isn't known.", code: 404 };
+  const busyHere = () => {
+    const r = readRun();
+    return r && path.resolve(r.dir) === p.dir && (isRunning() || r.status === "needs-answer");
+  };
+  switch (body.action) {
+    case "open":
+      try {
+        return { ok: true, app: await openApp(p) };
+      } catch (e) {
+        return { error: e.message, code: 409 };
+      }
+    case "stop":
+      return { ok: stopApp(p.dir) };
+    case "files": {
+      const r = await showFiles(p.dir);
+      return r.ok ? r : { error: r.error, code: 500 };
+    }
+    case "screenshot": {
+      const file = await captureScreenshot(p);
+      return file ? { ok: true } : { error: "Couldn't take a picture — this needs Chrome or Edge installed, and a project that opens in the browser.", code: 409 };
+    }
+    case "undo":
+    case "redo": {
+      if (busyHere()) return { error: "The team is working on this project right now — stop the run first.", code: 409 };
+      let checkpoint;
+      let title;
+      if (body.action === "undo") {
+        const h = readHistory().find((x) => x.id === body.runId && x.dir && path.resolve(x.dir) === p.dir);
+        if (!h?.checkpoint) return { error: "There's no saved copy to go back to for that change.", code: 404 };
+        if (h.allowGithub) return { error: "That change was published to GitHub, so it can't be undone here.", code: 409 };
+        checkpoint = h.checkpoint;
+        title = h.title;
+      } else {
+        if (!/^redo-\d+$/.test(String(body.checkpoint))) return { error: "Nothing to redo.", code: 400 };
+        checkpoint = body.checkpoint;
+      }
+      stopApp(p.dir);
+      try {
+        const r = restoreCheckpoint(p.dir, checkpoint);
+        const counts = `${r.restored} file${r.restored === 1 ? "" : "s"} put back, ${r.removed} removed`;
+        systemMessage(
+          body.action === "undo" ? `↶ ${p.name} is back to how it was before “${firstLine(title)}” (${counts}).` : `↷ Redone — ${p.name} is back to how it was before the undo (${counts}).`,
+          { actions: [{ kind: "redo", id: body.id, checkpoint: r.redoId }] },
+        );
+        return { ok: true, ...r };
+      } catch (e) {
+        return { error: e.message, code: 409 };
+      }
+    }
+    case "hide":
+    case "unhide": {
+      const hidden = new Set(readSettings().hiddenProjects);
+      body.action === "hide" ? hidden.add(p.dir) : hidden.delete(p.dir);
+      updateSettings({ hiddenProjects: [...hidden] });
+      return { ok: true };
+    }
   }
-}
-function gitInfo(dir) {
-  const hit = gitCache.get(dir);
-  if (hit && Date.now() - hit.t < 30000) return hit.info;
-  let info = { repo: false };
-  if (dir && fs.existsSync(path.join(dir, ".git"))) {
-    const remote = git(dir, ["remote", "get-url", "origin"]);
-    const m = remote && remote.match(/github\.com[:/]([^/]+)\/(.+?)(\.git)?$/i);
-    const slug = m ? `${m[1]}/${m[2]}` : null;
-    const ahead = slug ? Number(git(dir, ["rev-list", "--count", "@{u}..HEAD"]) ?? NaN) : NaN;
-    info = {
-      repo: true,
-      github: slug ? `https://github.com/${slug}` : null,
-      slug,
-      lastCommit: git(dir, ["log", "-1", "--format=%ct|%s"]),
-      uncommitted: (git(dir, ["status", "--porcelain"]) || "").split("\n").filter(Boolean).length,
-      unpushed: Number.isFinite(ahead) ? ahead : null,
-    };
-    if (slug) info.visibility = visibilityOf(slug);
-  }
-  gitCache.set(dir, { t: Date.now(), info });
-  return info;
-}
-// public/private via gh (async, cached 10 min); unknown until the first lookup finishes
-function visibilityOf(slug) {
-  const hit = ghVisibility.get(slug);
-  if (!hit || Date.now() - hit.t > 10 * 60 * 1000) {
-    ghVisibility.set(slug, { t: Date.now(), visibility: hit?.visibility || null });
-    execFile("gh", ["repo", "view", slug, "--json", "visibility", "-q", ".visibility"], { timeout: 15000, windowsHide: true }, (err, out) => {
-      ghVisibility.set(slug, { t: Date.now(), visibility: err ? hit?.visibility || null : String(out).trim().toLowerCase() || null });
-    });
-  }
-  return ghVisibility.get(slug).visibility;
-}
-const ACTIVE = ["running", "waiting", "needs-answer"]; // run states that aren't over yet
-function portfolio() {
-  const run = readRun();
-  const runs = readHistory();
-  if (run && ACTIVE.includes(run.status)) runs.unshift({ ...run, title: run.task.split("\n")[0] });
-  const byDir = new Map();
-  for (const r of runs) {
-    if (!r.dir) continue;
-    const p = byDir.get(r.dir) || { name: r.project, dir: r.dir, runs: 0, latest: r, firstAt: r.startedAt, built: false };
-    p.runs += 1;
-    if (r.status === "finished") p.built = true;
-    p.firstAt = Math.min(p.firstAt, r.startedAt || Infinity);
-    byDir.set(r.dir, p);
-  }
-  return [...byDir.values()].map((p) => {
-    const g = gitInfo(p.dir);
-    const [ct, subject] = (g.lastCommit || "").split(/\|(.*)/s);
-    return {
-      name: p.name,
-      dir: p.dir,
-      exists: fs.existsSync(p.dir),
-      runs: p.runs,
-      // project status: an active run wins; otherwise a project that was ever built successfully counts as built
-      // (a later failed/stopped run is shown as a note, not as the project's status)
-      status: ACTIVE.includes(p.latest.status) ? p.latest.status : p.built ? "finished" : p.latest.status,
-      lastRunNote: p.built && ["failed", "stopped", "interrupted"].includes(p.latest.status) ? `Last run ${p.latest.status}: ${p.latest.title}` : null,
-      latestTitle: p.latest.title,
-      lastActivity: p.latest.endedAt || p.latest.startedAt,
-      resumeAt: p.latest.resumeAt,
-      github: g.github || null,
-      visibility: g.visibility || null,
-      lastCommitAt: ct ? Number(ct) * 1000 : null,
-      lastCommitSubject: subject || null,
-      uncommitted: g.uncommitted ?? null,
-      unpushed: g.unpushed ?? null,
-      isRepo: g.repo,
-    };
-  });
+  return { error: "unknown action", code: 400 };
 }
 
 // Short plain-text status for /status on the phone.
@@ -434,14 +501,15 @@ function statusText() {
   const s = readState();
   const run = readRun();
   const lines = [];
-  if (run?.status === "running") lines.push(`🟢 Working on: ${run.project} — ${run.task.split("\n")[0].slice(0, 160)}`);
+  if (run?.status === "running") lines.push(`🟢 Working on: ${run.project} — ${firstLine(run.task)}`);
   else if (run?.status === "waiting") lines.push(`⏳ Paused by the usage limit — resumes at ${fmtTime(run.resumeAt)} (in ${fmtIn(run.resumeAt)}).`);
-  else if (run?.status === "needs-answer") lines.push(`⏸ Paused until you answer the team's question — ${run.project}: ${run.task.split("\n")[0].slice(0, 120)}`);
-  else if (run) lines.push(`Last run ${run.status}: ${run.project} — ${run.task.split("\n")[0].slice(0, 120)}`);
+  else if (run?.status === "needs-answer") lines.push(`⏸ Paused until you answer the team's question — ${run.project}: ${firstLine(run.task)}`);
+  else if (run) lines.push(`Last run ${run.status}: ${run.project} — ${firstLine(run.task)}`);
   else lines.push("The team is idle — tell me what to build.");
   if (run?.status === "running" && s.task) {
     const done = (s.tasks || []).filter((t) => t.status === "done").length;
-    lines.push(`Phase: ${String(s.phase).toUpperCase()} · ${done}/${(s.tasks || []).length} tasks done`);
+    const left = minutesLeft(s, readHistory());
+    lines.push(`Phase: ${String(s.phase).toUpperCase()} · ${done}/${(s.tasks || []).length} parts done${left ? ` · ${fmtMinutes(left)} left` : ""}`);
     const working = Object.entries(s.agents || {}).filter(([id, a]) => a.state === "working" && id !== "manager");
     for (const [id, a] of working) lines.push(`• ${id}: ${a.activity || "working"}`);
   }
@@ -452,20 +520,33 @@ function statusText() {
 const telegram = createTelegram({
   onText: (text, via) => sendUserMessage(text, via),
   onAnswer: (text, via) => answerTeam(text, via),
-  onRunAction: (action, id, via) => runAction(action, id, via),
+  onRunAction: (action, args, via) => runAction(action, args, via),
   statusText,
+  studioName: () => readSettings().studioName,
 });
 
 function launch(proposal) {
-  if (isRunning()) return systemMessage("A run is already in progress or paused until the usage limit resets — stop it (■ in the chat) before starting another.");
+  if (isRunning()) {
+    // one run at a time: queue this one, it starts when the current run finishes
+    updateChat((c) => {
+      c.queue = [...(c.queue || []), proposal].slice(0, 10);
+      if (c.proposal?.id === proposal.id) c.proposal = null;
+      c.messages.push(msg("system", `⏭ Queued: ${firstLine(proposal.task)} — the team starts it as soon as the current run is done.`));
+    });
+    return;
+  }
   try {
     // A fresh run starts with an empty inbox: notes left from earlier runs (or from when no run was listening)
     // aren't instructions for this one.
     updateChat((c) => c.inbox.forEach((m) => (m.read = true)));
-    startRun({ project: proposal.project, task: proposal.task, allowGithub: !!proposal.allowGithub }, onRunEvent);
+    const { skipped } = startRun({ project: proposal.project, task: proposal.task, allowGithub: !!proposal.allowGithub, size: proposal.size || "standard" }, onRunEvent);
     updateChat((c) => {
-      c.proposal = null;
-      c.messages.push(msg("system", `🚀 Run started: ${proposal.task}\nProject folder: ${proposal.dir}${proposal.isNew ? " (new)" : ""}. The team will post the plan here for your go-ahead before building.`));
+      if (c.proposal?.id === proposal.id) c.proposal = null;
+      c.messages.push(
+        msg("system", `🚀 The team is starting on: ${firstLine(proposal.task)}. They'll post a plan here for your OK before building anything.`, {
+          details: `Project folder: ${proposal.dir}${proposal.isNew ? " (new)" : ""}${skipped.length ? `\nKept this project's own versions of: ${skipped.join(", ")}` : ""}`,
+        }),
+      );
     });
     updateState((s) => setAgent(s, "manager", "waiting", "Team is on it"));
   } catch (e) {
@@ -481,143 +562,215 @@ function localHost(host) {
   return LOCAL_HOSTS.has(h.startsWith("[") ? h.slice(0, h.indexOf("]") + 1) : h.split(":")[0]);
 }
 
-const server = http
-  .createServer(async (req, res) => {
-    if (!localHost(req.headers.host)) return send(res, 403, { error: "forbidden" });
-    const url = new URL(req.url, "http://localhost");
+async function handle(req, res) {
+  if (!localHost(req.headers.host)) return send(res, 403, { error: "forbidden" });
+  const url = new URL(req.url, "http://localhost");
+  const route = url.pathname;
 
-    if (url.pathname === "/api/state") {
-      let state = {};
-      try {
-        state = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
-      } catch {}
-      return send(res, 200, { ...state, configuredModels: configuredModels(), run: readRun() });
+  // Only accept same-origin JSON posts, so other websites can't drive the manager or launch runs.
+  // (an unparsable Origin such as "null" from a sandboxed frame counts as foreign — and must not throw)
+  const sameOriginJson = () => {
+    const origin = req.headers.origin;
+    let host = null;
+    try {
+      host = origin ? new URL(origin).host : req.headers.host;
+    } catch {}
+    return host === req.headers.host && String(req.headers["content-type"]).startsWith("application/json");
+  };
+  const jsonBody = async (limit) => {
+    if (req.method !== "POST" || !sameOriginJson()) return { forbidden: true };
+    try {
+      return { body: JSON.parse(await readBody(req, limit)) || {} };
+    } catch {
+      return { bad: true };
     }
+  };
+  const reply = (r, ok = 200) => send(res, r.error ? r.code || 400 : ok, r);
 
-    if (url.pathname === "/api/portfolio") return send(res, 200, { projects: portfolio() });
+  if (route === "/api/ping") return send(res, 200, { app: "devstudio", pid: process.pid, name: readSettings().studioName });
 
-    // Past runs + lessons for the Projects / Lessons tabs.
-    if (url.pathname === "/api/overview") {
-      const lessonLines = (file) => {
-        try {
-          return fs.readFileSync(file, "utf8").split("\n").filter((l) => l.startsWith("- ")).map((l) => l.slice(2)).slice(-50);
-        } catch {
-          return [];
-        }
-      };
-      const history = readHistory();
-      const projects = [...new Map(history.map((h) => [h.dir, h])).values()].slice(0, 8);
-      return send(res, 200, {
-        history,
-        lessons: {
-          global: lessonLines(path.join(ROOT, ".claude", "playbooks", "lessons-global.md")),
-          projects: projects.map((h) => ({ project: h.project, dir: h.dir, lines: lessonLines(path.join(h.dir, ".claude", "lessons.md")) })).filter((p) => p.lines.length),
-        },
-      });
+  if (route === "/api/state") {
+    let state = {};
+    try {
+      state = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+    } catch {}
+    const run = readRun();
+    const left = run?.status === "running" && state.task ? minutesLeft(state, readHistory()) : null;
+    return send(res, 200, { ...state, configuredModels: configuredModels(), run, studioName: readSettings().studioName, minutesLeft: left });
+  }
+
+  if (route === "/api/health") {
+    if (url.searchParams.has("refresh") || !health) await refreshHealth().catch(() => {});
+    return send(res, 200, health || { ready: false, checks: [] });
+  }
+
+  if (route === "/api/settings") {
+    if (req.method === "GET") return send(res, 200, { ...readSettings(), projectsRoot: projectsRoot(), defaultProjectsDir: defaultProjectsDir(), envProjects: !!process.env.DEVSTUDIO_PROJECTS });
+    const { body, forbidden, bad } = await jsonBody(4096);
+    if (forbidden) return send(res, 403, { error: "forbidden" });
+    if (bad) return send(res, 400, { error: "bad request" });
+    try {
+      const next = updateSettings({ ...("studioName" in body ? { studioName: body.studioName } : {}), ...("projectsDir" in body ? { projectsDir: body.projectsDir } : {}), ...("lightTeam" in body ? { lightTeam: body.lightTeam } : {}) });
+      refreshHealth().catch(() => {});
+      return send(res, 200, { ...next, projectsRoot: projectsRoot(), defaultProjectsDir: defaultProjectsDir() });
+    } catch (e) {
+      return send(res, 400, { error: e.message });
     }
+  }
 
-    if (url.pathname === "/api/chat" && req.method === "GET") {
-      let chat = { messages: [], inbox: [], busy: false };
-      try {
-        chat = JSON.parse(fs.readFileSync(CHAT_FILE, "utf8"));
-      } catch {}
-      const st = readState();
-      const managerModel = st.models?.manager || configuredModels().manager || "";
-      return send(res, 200, { ...chat, run: readRun(), draft: chat.busy ? draft : "", managerModel, ask: st.ask || null });
+  if (route === "/api/portfolio") return send(res, 200, { projects: portfolio({ appStatus, showHidden: url.searchParams.has("hidden") }) });
+
+  if (route === "/api/apps") {
+    const p = findProject(url.searchParams.get("id"));
+    if (!p) return send(res, 404, { error: "That project isn't known." });
+    const { manifest } = readManifest(p.dir);
+    return send(res, 200, { project: { id: url.searchParams.get("id"), name: manifest?.name || p.name }, app: appStatus(p.dir), howTo: manifest?.howTo || [], kind: manifest?.kind || null });
+  }
+
+  // /api/projects/<id>/screenshot and /api/projects/<id>/zip
+  const pm = route.match(/^\/api\/projects\/([0-9a-f]{12})\/(screenshot|zip)$/);
+  if (pm && req.method === "GET") {
+    const p = findProject(pm[1]);
+    if (!p || !fs.existsSync(p.dir)) return send(res, 404, { error: "That project isn't known." });
+    if (pm[2] === "screenshot") {
+      const { manifest } = readManifest(p.dir);
+      const own = manifest?.screenshot && insidePath(p.dir, manifest.screenshot);
+      const file = own && fs.existsSync(own) ? own : screenshotPath(p.dir);
+      if (!fs.existsSync(file)) return send(res, 404, { error: "No picture yet." });
+      const type = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" }[path.extname(file).toLowerCase()] || "image/png";
+      return send(res, 200, fs.readFileSync(file), type);
     }
+    try {
+      const zip = zipDirectory(p.dir, { rootName: p.name });
+      res.writeHead(200, { "content-type": "application/zip", "content-disposition": `attachment; filename="${p.name}.zip"`, "cache-control": "no-store" });
+      return res.end(zip);
+    } catch (e) {
+      return send(res, 413, { error: e.message });
+    }
+  }
 
-    // Only accept same-origin JSON posts, so other websites can't drive the manager or launch runs.
-    // (an unparsable Origin such as "null" from a sandboxed frame counts as foreign — and must not throw)
-    const sameOriginJson = () => {
-      const origin = req.headers.origin;
-      let host = null;
+  if (route === "/api/projects" && req.method === "POST") {
+    const { body, forbidden, bad } = await jsonBody(2048);
+    if (forbidden) return send(res, 403, { error: "forbidden" });
+    if (bad) return send(res, 400, { error: "bad request" });
+    return reply(await projectAction(body));
+  }
+
+  // Past runs + lessons for the Projects / Lessons tabs.
+  if (route === "/api/overview") {
+    const lessonLines = (file) => {
       try {
-        host = origin ? new URL(origin).host : req.headers.host;
-      } catch {}
-      return host === req.headers.host && String(req.headers["content-type"]).startsWith("application/json");
+        return fs.readFileSync(file, "utf8").split("\n").filter((l) => l.startsWith("- ")).map((l) => l.slice(2)).slice(-50);
+      } catch {
+        return [];
+      }
     };
-
-    // Direct answer to a team question (T ask) — goes straight to the team's inbox, no manager round-trip.
-    if (url.pathname === "/api/answer" && req.method === "POST") {
-      if (!sameOriginJson()) return send(res, 403, { error: "forbidden" });
-      let text;
-      try {
-        text = String(JSON.parse(await readBody(req, 8192)).text || "").trim();
-      } catch {
-        return send(res, 400, { error: "bad request" });
-      }
-      const r = answerTeam(text);
-      return send(res, r.error ? r.code : 200, r);
-    }
-
-    // Phone (Telegram) connection: status, connect with a bot token, new pairing code, disconnect.
-    if (url.pathname === "/api/telegram") {
-      if (req.method === "GET") return send(res, 200, telegram.status());
-      if (req.method !== "POST" || !sameOriginJson()) return send(res, 403, { error: "forbidden" });
-      let body;
-      try {
-        body = JSON.parse(await readBody(req, 2048));
-      } catch {
-        return send(res, 400, { error: "bad request" });
-      }
-      try {
-        if (body.action === "setup") return send(res, 200, await telegram.setup(body.token));
-        if (body.action === "newcode") return send(res, 200, telegram.newPairCode());
-        if (body.action === "disconnect") return send(res, 200, telegram.disconnect());
-      } catch (e) {
-        return send(res, 400, { error: /Unauthorized|401/i.test(e.message) ? "Telegram rejected that token — copy it again from @BotFather." : e.message });
-      }
-      return send(res, 400, { error: "unknown action" });
-    }
-
-    if (url.pathname === "/api/run" && req.method === "POST") {
-      if (!sameOriginJson()) return send(res, 403, { error: "forbidden" });
-      let body;
-      try {
-        body = JSON.parse(await readBody(req, 1024));
-      } catch {
-        return send(res, 400, { error: "bad request" });
-      }
-      const r = runAction(body.action, body.proposalId);
-      return send(res, r.error ? r.code : 200, r);
-    }
-
-    if (url.pathname === "/api/chat" && req.method === "POST") {
-      if (!sameOriginJson()) return send(res, 403, { error: "forbidden" });
-      let text;
-      try {
-        text = String(JSON.parse(await readBody(req)).text || "").trim();
-      } catch {
-        return send(res, 400, { error: "bad request" });
-      }
-      const r = sendUserMessage(text);
-      return send(res, r.error ? r.code : 202, r);
-    }
-
-    const file = path.normalize(path.join(PUBLIC, url.pathname === "/" ? "index.html" : url.pathname));
-    if (!file.startsWith(PUBLIC)) return send(res, 403, "", "text/plain");
-    fs.readFile(file, (err, data) => {
-      if (err) return send(res, 404, "Not found", "text/plain");
-      res.writeHead(200, { "content-type": TYPES[path.extname(file)] || "application/octet-stream", "cache-control": "no-store" });
-      res.end(data);
+    const history = readHistory();
+    const projects = [...new Map(history.map((h) => [h.dir, h])).values()].slice(0, 8);
+    return send(res, 200, {
+      history: history.map(({ task, sessionId, tCmd, ...h }) => h),
+      lessons: {
+        global: lessonLines(path.join(ROOT, ".claude", "playbooks", "lessons-global.md")),
+        projects: projects.map((h) => ({ project: h.project, dir: h.dir, lines: lessonLines(path.join(h.dir, ".claude", "lessons.md")) })).filter((p) => p.lines.length),
+      },
     });
-  })
+  }
+
+  if (route === "/api/chat" && req.method === "GET") {
+    let chat = { messages: [], inbox: [], busy: false };
+    try {
+      chat = JSON.parse(fs.readFileSync(CHAT_FILE, "utf8"));
+    } catch {}
+    const st = readState();
+    const managerModel = st.models?.manager || configuredModels().manager || "";
+    const { inbox, sessionId, ...pub } = chat;
+    return send(res, 200, { ...pub, queue: (chat.queue || []).map((q) => ({ task: firstLine(q.task), project: q.project })), run: readRun(), draft: chat.busy ? draft : "", managerModel, ask: st.ask || null });
+  }
+
+  // Direct answer to a team question (T ask) — goes straight to the team's inbox, no manager round-trip.
+  if (route === "/api/answer") {
+    const { body, forbidden, bad } = await jsonBody(8192);
+    if (forbidden) return send(res, 403, { error: "forbidden" });
+    if (bad) return send(res, 400, { error: "bad request" });
+    return reply(answerTeam(String(body.text || "").trim()));
+  }
+
+  // Phone (Telegram) connection: status, connect with a bot token, new pairing code, disconnect.
+  if (route === "/api/telegram") {
+    if (req.method === "GET") return send(res, 200, telegram.status());
+    const { body, forbidden, bad } = await jsonBody(2048);
+    if (forbidden) return send(res, 403, { error: "forbidden" });
+    if (bad) return send(res, 400, { error: "bad request" });
+    try {
+      if (body.action === "setup") return send(res, 200, await telegram.setup(body.token));
+      if (body.action === "newcode") return send(res, 200, telegram.newPairCode());
+      if (body.action === "disconnect") return send(res, 200, telegram.disconnect());
+    } catch (e) {
+      return send(res, 400, { error: /Unauthorized|401/i.test(e.message) ? "Telegram rejected that token — copy it again from @BotFather." : e.message });
+    }
+    return send(res, 400, { error: "unknown action" });
+  }
+
+  if (route === "/api/run") {
+    const { body, forbidden, bad } = await jsonBody(1024);
+    if (forbidden) return send(res, 403, { error: "forbidden" });
+    if (bad) return send(res, 400, { error: "bad request" });
+    return reply(runAction(body.action, { proposalId: body.proposalId, runId: body.runId, index: body.index }));
+  }
+
+  if (route === "/api/chat" && req.method === "POST") {
+    const { body, forbidden, bad } = await jsonBody();
+    if (forbidden) return send(res, 403, { error: "forbidden" });
+    if (bad) return send(res, 400, { error: "bad request" });
+    return reply(await sendUserMessage(String(body.text || "").trim()), 202);
+  }
+
+  if (route.startsWith("/api/")) return send(res, 404, { error: "not found" });
+  const file = path.normalize(path.join(PUBLIC, route === "/" ? "index.html" : route));
+  if (!file.startsWith(PUBLIC + path.sep)) return send(res, 403, "", "text/plain");
+  fs.readFile(file, (err, data) => {
+    if (err) return send(res, 404, "Not found", "text/plain");
+    res.writeHead(200, { "content-type": TYPES[path.extname(file)] || "application/octet-stream", "cache-control": "no-store" });
+    res.end(data);
+  });
+}
+
+const server = http
+  .createServer((req, res) =>
+    // one bad request must never take the office down
+    handle(req, res).catch((e) => {
+      console.error("[office] request failed:", e);
+      if (!res.headersSent) send(res, 500, { error: "Something went wrong in the office." });
+      else res.end();
+    }),
+  )
   .listen(PORT, "127.0.0.1", () => {
+    const port = server.address().port;
     // Clear a stale "busy" flag left by a server that was stopped mid-reply.
     try {
       if (readChat().busy) updateChat((c) => (c.busy = false));
       recoverRunState(onRunEvent); // re-arms an automatic resume if a run is waiting for a usage reset
     } catch {}
-    console.log(`Team office running at http://localhost:${PORT}`);
+    try {
+      fs.mkdirSync(DIR, { recursive: true });
+      fs.writeFileSync(PID_FILE, JSON.stringify({ pid: process.pid, port, startedAt: Date.now() }));
+    } catch {}
+    console.log(`Team office running at http://localhost:${port}`);
   });
 server.on("error", (e) => {
   if (e.code !== "EADDRINUSE") throw e;
   console.error(`Port ${PORT} is already in use — the Dev Studio is probably already running: open http://localhost:${PORT}\n(or start it on another port: node tools/team-office/server.mjs <port>)`);
   process.exit(1);
 });
+process.on("exit", () => {
+  try {
+    if (JSON.parse(fs.readFileSync(PID_FILE, "utf8")).pid === process.pid) fs.rmSync(PID_FILE, { force: true });
+  } catch {}
+});
 for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.on(sig, () => {
     shutdown();
+    stopAllApps();
     process.exit(0);
   });
 }

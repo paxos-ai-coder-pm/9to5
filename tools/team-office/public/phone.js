@@ -1,9 +1,23 @@
 // "📱" panel: connect a Telegram bot so you can talk to the manager from your phone.
 import { esc } from "./agents.js";
+import { createDialog } from "./ui.js";
+import qrcode from "./vendor/qrcode.mjs"; // MIT, Kazuhiko Arase — vendored, no network
+
+// The pairing link as a QR code (SVG), so the phone can scan it straight off the screen.
+export function qrSvg(text) {
+  const qr = qrcode(0, "M");
+  qr.addData(text);
+  qr.make();
+  const n = qr.getModuleCount();
+  let path = "";
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) path += `M${c} ${r}h1v1h-1z`;
+  return `<svg viewBox="0 0 ${n} ${n}" role="img" aria-label="QR code for the pairing link" shape-rendering="crispEdges"><path d="${path}" fill="#000"/></svg>`;
+}
 
 export function createPhone() {
   const $ = (id) => document.getElementById(id);
   const modal = $("phoneModal");
+  const dialog = createDialog(modal, { onClose: () => clearInterval(timer) });
   const body = $("phoneBody");
   let st = null;
   let timer = null;
@@ -41,7 +55,7 @@ export function createPhone() {
         <p>Chat with your manager from anywhere using <b>Telegram</b> (free). Your PC connects out to Telegram, so there's nothing to open on your router. Only your own Telegram account will be able to use the bot.</p>
         <ol class="m-steps">
           <li>Install <b>Telegram</b> on your phone and sign in.</li>
-          <li>In Telegram, open <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> and send <code>/newbot</code>. Give it any name, e.g. <i>Vikrant Dev Studio</i>, and a username ending in <code>bot</code>.</li>
+          <li>In Telegram, open <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> and send <code>/newbot</code>. Give it any name, e.g. <i>My Dev Studio</i>, and a username ending in <code>bot</code>.</li>
           <li>BotFather replies with a <b>token</b> like <code>123456789:AAH…</code>. Copy it and paste it here:</li>
         </ol>
         <form class="m-form" id="tokenForm">
@@ -68,8 +82,8 @@ export function createPhone() {
       body.innerHTML = `
         <p>✓ Bot <b>@${esc(st.botUsername)}</b> is connected. Now link it to <b>your</b> Telegram account:</p>
         <ol class="m-steps">
-          <li>On your phone, open this link (or scan it from the phone's camera app if you're reading this on the PC):<br>
-            <a class="m-link" href="${esc(st.pairLink)}" target="_blank" rel="noopener">${esc(st.pairLink)}</a></li>
+          <li>Point your phone's camera at this code (or open the link on your phone):
+            <div class="qr">${qrSvg(st.pairLink)}<a class="m-link" href="${esc(st.pairLink)}" target="_blank" rel="noopener">${esc(st.pairLink)}</a></div></li>
           <li>Telegram opens the bot — tap <b>Start</b>. That's it.</li>
         </ol>
         <p class="m-note">Or send this to @${esc(st.botUsername)}: <code>/start ${esc(st.pairCode)}</code> · the code expires in ${mins} min <button class="px-btn small ghost" id="newCode">NEW CODE</button></p>
@@ -97,20 +111,14 @@ export function createPhone() {
   }
 
   function open() {
-    modal.hidden = false;
     render();
+    dialog.open();
     load();
     clearInterval(timer);
     timer = setInterval(load, 3000); // notice pairing as soon as you tap Start
   }
-  function close() {
-    modal.hidden = true;
-    clearInterval(timer);
-  }
   $("phoneBtn").onclick = open;
-  $("phoneClose").onclick = close;
-  modal.addEventListener("click", (e) => e.target === modal && close());
-  document.addEventListener("keydown", (e) => e.key === "Escape" && !modal.hidden && close());
+  $("phoneClose").onclick = () => dialog.close();
 
   load();
   setInterval(load, 60000);

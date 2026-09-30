@@ -1,26 +1,30 @@
 // Launches the /team pipeline headlessly (`claude -p "/team …"`) when the user confirms a run the manager proposed.
-// New projects get their own sibling folder next to this repo, seeded with the team's agents and /team skill.
-// If a run hits the Claude usage limit it waits and resumes the same session automatically after each reset.
-// If the lead stops because the user hasn't answered its question yet, the run resumes as soon as they answer.
+// Projects live in the projects folder (settings.mjs), seeded with the team's agents, /team skill and playbooks.
+// Before a run touches a project its files are checkpointed, so the user can undo the run.
+// A run that stops early can continue in the same session:
+//   - hits the Claude usage limit → waits and resumes automatically after each reset
+//   - the lead stops because the user hasn't answered its question → resumes as soon as they answer
+//   - interrupted (office closed, computer slept), failed or stopped → the user can press ↻ Continue
 import fs from "node:fs";
 import path from "node:path";
-import { spawn, execFileSync } from "node:child_process";
-import { ROOT, DIR, updateState, setModel, readState, readChat, claudeEnv, signInHint } from "./lib.mjs";
+import { spawn } from "node:child_process";
+import { ROOT, DIR, updateState, setModel, readState, readChat, claudeEnv, signInHint, readRun, writeRun, readHistory, writeHistory, killTree } from "./lib.mjs";
+import { resolveProject, prepareProject, T_CMD, TEAM_CLI } from "./projects.mjs";
+import { readSettings } from "./settings.mjs";
+import { createCheckpoint } from "./checkpoint.mjs";
+import { CLAUDE_BIN } from "./health.mjs";
 import { createStreamParser } from "./stream.mjs";
 
-const RUN_FILE = path.join(DIR, "run.json");
+export { readRun, readHistory };
+
 const LOG_DIR = path.join(DIR, "runs");
-const TEAM_CLI = path.join(ROOT, "tools", "team-office", "team.mjs");
-const PROJECTS_ROOT = path.resolve(ROOT, "..");
-const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
-// how every agent calls the office CLI from any project folder (forward slashes work in Git Bash and cmd)
-const T_CMD = `node "${TEAM_CLI.replaceAll("\\", "/")}"`;
-const MAX_ATTEMPTS = 20; // resume at most this many times across usage resets
+const MAX_ATTEMPTS = 20; // resume at most this many times
 const RESUME_BUFFER_MS = 90 * 1000; // start a little after the reset time
 const FALLBACK_WAIT_MS = 30 * 60 * 1000; // if no reset time is known, check back in 30 min
 
 // What an unattended run may do: edit files inside the project folder (acceptEdits is scoped to the working
-// directory) and run project tooling. No git commit/push, no deletes.
+// directory) and run project tooling. No git commit/push, no deletes. (This list steers the team; it is not a
+// sandbox — node/python/npm can run any program. See README "Safety".)
 const ALLOWED_TOOLS = [
   "Read", "Glob", "Grep", "Edit", "Write", "Agent", "Task", "TodoWrite", "WebFetch", "WebSearch", "Skill",
   "Bash(node:*)", "Bash(npm:*)", "Bash(npx:*)", "Bash(curl:*)", "Bash(sleep:*)",
@@ -35,14 +39,19 @@ const ALLOWED_TOOLS = [
 ];
 
 // Extra rights for runs the user explicitly approved to publish (proposal card says so; Start = consent).
+// GitHub Pages ("put it online") is switched on with a POST to the repo's pages endpoint.
 const GITHUB_TOOLS = [
   "Bash(git commit:*)", "Bash(git push:*)", "Bash(git remote:*)", "Bash(git branch:*)", "Bash(git checkout:*)", "Bash(git rm:*)",
   "Bash(gh repo create:*)", "Bash(gh repo view:*)", "Bash(gh auth status:*)", "Bash(gh api user:*)",
+  "Bash(gh api -X POST repos/:*)", "Bash(gh api -X GET repos/:*)",
 ];
 // Never allowed, even for publishing runs.
 const DENIED_TOOLS = [
   "Bash(git push --force:*)", "Bash(git push -f:*)", "Bash(git push --force-with-lease:*)", "Bash(git push --delete:*)",
-  "Bash(git reset --hard:*)", "Bash(gh repo delete:*)", "Bash(gh repo archive:*)", "Bash(gh auth:*)", "Bash(rm:*)",
+  "Bash(git reset --hard:*)", "Bash(gh repo delete:*)", "Bash(gh repo archive:*)", "Bash(rm:*)",
+  // sign-in stays the user's business (`gh auth status` above is read-only and allowed)
+  "Bash(gh auth login:*)", "Bash(gh auth logout:*)", "Bash(gh auth token:*)", "Bash(gh auth refresh:*)", "Bash(gh auth setup-git:*)", "Bash(gh auth switch:*)",
+  "Bash(gh api -X DELETE:*)", "Bash(gh api --method DELETE:*)", "Bash(gh api -X PATCH:*)", "Bash(gh api -X PUT:*)",
   // a run must never change its own permissions or settings
   "Skill(fewer-permission-prompts)", "Skill(update-config)", "Edit(.claude/settings*.json)", "Write(.claude/settings*.json)",
 ];
@@ -52,38 +61,21 @@ let stopping = false;
 let resumeTimer = null;
 let onEvent = null; // (run) => void — called on waiting / needs-answer / resumed / finished / failed / stopped
 
-export function readRun() {
-  try {
-    return JSON.parse(fs.readFileSync(RUN_FILE, "utf8"));
-  } catch {
-    return null;
-  }
-}
-function writeRun(run) {
-  fs.mkdirSync(DIR, { recursive: true });
-  fs.writeFileSync(RUN_FILE, JSON.stringify(run, null, 2));
-}
-const HISTORY_FILE = path.join(DIR, "history.json");
-export function readHistory() {
-  try {
-    return JSON.parse(fs.readFileSync(HISTORY_FILE, "utf8"));
-  } catch {
-    return [];
-  }
-}
-// Finished/failed/stopped runs, newest first (for the Projects tab).
+// Finished/failed/stopped runs, newest first (for My Projects, estimates, Continue and Undo).
 function recordHistory(run) {
   const entry = {
-    id: run.id, project: run.project, dir: run.dir, title: String(run.task || "").split("\n")[0].slice(0, 200), status: run.status,
-    startedAt: run.startedAt, endedAt: run.endedAt || Date.now(), attempts: run.attempts || 1, allowGithub: !!run.allowGithub,
+    id: run.id, project: run.project, dir: run.dir, title: String(run.task || "").split("\n")[0].slice(0, 200), task: String(run.task || "").slice(0, 8000),
+    status: run.status, startedAt: run.startedAt, endedAt: run.endedAt || Date.now(), attempts: run.attempts || 1,
+    allowGithub: !!run.allowGithub, size: run.size || "standard", isNew: !!run.isNew, checkpoint: run.checkpoint || undefined,
+    sessionId: run.sessionId || undefined, tCmd: run.tCmd, log: run.log,
+    activeMs: run.activeMs, buildMs: run.buildMs, taskCount: run.taskCount,
     summary: run.summary ? String(run.summary).slice(0, 1200) : undefined, error: run.error,
   };
-  const list = [entry, ...readHistory().filter((h) => h.id !== run.id)].slice(0, 100);
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify(list, null, 2));
+  writeHistory([entry, ...readHistory().filter((h) => h.id !== run.id)]);
 }
 const emit = (run) => {
   try {
-    if (["finished", "failed", "stopped"].includes(run.status)) recordHistory(run);
+    if (["finished", "failed", "stopped", "interrupted"].includes(run.status)) recordHistory(run);
   } catch {}
   try {
     onEvent?.(run);
@@ -98,50 +90,12 @@ export const isRunning = () => !!child || readRun()?.status === "waiting";
 export function recoverRunState(handler) {
   if (handler) onEvent = handler;
   const run = readRun();
-  if (run?.status === "running" && !child) writeRun({ ...run, status: "interrupted", endedAt: Date.now() });
+  if (run?.status === "running" && !child) {
+    const done = { ...run, status: "interrupted", endedAt: Date.now() };
+    writeRun(done);
+    emit(done);
+  }
   if (run?.status === "waiting") scheduleResume(run);
-}
-
-// "." / this repo's folder name → the Dev Studio itself; otherwise a sibling folder (created if missing).
-export function resolveProject(name) {
-  const n = String(name || "").trim().toLowerCase();
-  const here = path.basename(ROOT).toLowerCase();
-  if (!n || n === "." || n === here) return { name: path.basename(ROOT), dir: ROOT, isNew: false };
-  if (!/^[a-z0-9][a-z0-9-]{1,48}$/.test(n)) throw new Error(`"${name}" isn't a valid project folder name (use lowercase letters, digits and dashes).`);
-  const dir = path.join(PROJECTS_ROOT, n);
-  const isNew = !fs.existsSync(dir) || fs.readdirSync(dir).filter((f) => f !== ".git").length === 0;
-  return { name: n, dir, isNew };
-}
-
-function prepareProject(p) {
-  fs.mkdirSync(p.dir, { recursive: true });
-  if (p.dir === ROOT) return;
-  if (!fs.existsSync(path.join(p.dir, ".git"))) execFileSync("git", ["init", "-q"], { cwd: p.dir });
-  // Seed (and refresh) the team's playbook so the pipeline works the same in every project. The office CLI lives
-  // in this repo, so its relative path is rewritten to an absolute one (env-var paths get blocked in headless runs).
-  const seed = (from, to) => {
-    fs.mkdirSync(path.dirname(to), { recursive: true });
-    fs.writeFileSync(to, fs.readFileSync(from, "utf8").replaceAll("node tools/team-office/team.mjs", T_CMD));
-  };
-  for (const f of fs.readdirSync(path.join(ROOT, ".claude", "agents"))) {
-    if (f !== "manager.md") seed(path.join(ROOT, ".claude", "agents", f), path.join(p.dir, ".claude", "agents", f));
-  }
-  seed(path.join(ROOT, ".claude", "skills", "team", "SKILL.md"), path.join(p.dir, ".claude", "skills", "team", "SKILL.md"));
-  // playbooks (discipline + practice + stack guides); global lessons stay in the studio repo and are read via `T lessons`
-  const pbDir = path.join(ROOT, ".claude", "playbooks");
-  for (const f of fs.existsSync(pbDir) ? fs.readdirSync(pbDir) : []) {
-    if (f.endsWith(".md") && f !== "lessons-global.md") seed(path.join(pbDir, f), path.join(p.dir, ".claude", "playbooks", f));
-  }
-  const gi = path.join(p.dir, ".gitignore");
-  const cur = fs.existsSync(gi) ? fs.readFileSync(gi, "utf8") : "";
-  if (!cur.includes(".claude/team/")) fs.appendFileSync(gi, `${cur && !cur.endsWith("\n") ? "\n" : ""}# team run state\n.claude/team/\ntests/scratch/\n`);
-}
-
-function killTree(pid) {
-  try {
-    if (process.platform === "win32") execFileSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
-    else process.kill(-pid, "SIGTERM");
-  } catch {}
 }
 
 // Fallback when the stream carried no resetsAt: parse "resets 10:50pm (America/Los_Angeles)".
@@ -176,29 +130,37 @@ function scheduleResume(run) {
   resumeTimer = setTimeout(() => (Date.now() >= run.resumeAt - 1000 ? resumeRun() : scheduleResume(readRun())), Math.min(wait, 6 * 3600 * 1000));
 }
 
-// reason "usage": the usage limit reset (run is "waiting"); "answer": the user replied (run is "needs-answer").
+const HEADLESS_RULES = (run) =>
+  `Same HEADLESS rules as before: the user isn't watching this terminal, talk to them only via ${run.tCmd} say / ask / wait. ` +
+  `If a command is refused by permissions, do NOT try to change settings, permissions, or config and don't hunt for workarounds — tell the user what you need with T say, then continue with everything you can do without it. ` +
+  (run.allowGithub ? `GitHub publishing is still allowed for this run as the task describes (no force-push, no deletes).` : `Never git commit or push.`);
+
+// reason "usage": the usage limit reset (run is "waiting"); "answer": the user replied (run is "needs-answer");
+// "continue": the user pressed ↻ Continue on an interrupted / failed / stopped run.
 function resumeRun(reason = "usage") {
   const run = readRun();
-  if (!run || run.status !== (reason === "answer" ? "needs-answer" : "waiting") || child) return false;
+  const expected = { usage: ["waiting"], answer: ["needs-answer"], continue: ["failed", "interrupted", "stopped"] }[reason];
+  if (!run || !expected.includes(run.status) || child || !run.sessionId) return false;
   if ((run.attempts || 1) >= MAX_ATTEMPTS) {
     const done = { ...run, status: "failed", endedAt: Date.now(), error: `Gave up after ${run.attempts} attempts.` };
     writeRun(done);
     emit(done);
     return false;
   }
-  const intro =
-    reason === "answer"
-      ? `The user has replied to your question — continue the team pipeline exactly where you left off. ` +
-        `First run ${run.tCmd} inbox to read their reply and ${run.tCmd} resume to see the office board (if you set the phase to done when you paused, set it back with ${run.tCmd} phase <the phase you were in>); `
-      : `Your Claude usage limit has reset — continue the team pipeline exactly where you left off. ` +
-        `First run ${run.tCmd} resume to see the office board (done / active / blocked / ready tasks) and ${run.tCmd} inbox for any new messages from the user; `;
-  const prompt =
-    intro +
-    `then carry on with the remaining steps of the /team skill (re-spawn any teammate whose work was cut off, with the plan and what's already done). ` +
-    `Same HEADLESS rules as before: the user isn't watching this terminal, talk to them only via ${run.tCmd} say / inbox. ` +
-    `If a command is refused by permissions, do NOT try to change settings, permissions, or config and don't hunt for workarounds — tell the user what you need with T say, then continue with everything you can do without it. ` +
-    (run.allowGithub ? `GitHub publishing is still allowed for this run as the task describes (no force-push, no deletes).` : `Never git commit or push.`);
-  const next = { ...run, attempts: (run.attempts || 1) + 1, resumedAt: Date.now() };
+  const intro = {
+    answer:
+      `The user has replied to your question — continue the team pipeline exactly where you left off. ` +
+      `First run ${run.tCmd} inbox to read their reply and ${run.tCmd} resume to see the office board (if you set the phase to done when you paused, set it back with ${run.tCmd} phase <the phase you were in>); `,
+    usage:
+      `Your Claude usage limit has reset — continue the team pipeline exactly where you left off. ` +
+      `First run ${run.tCmd} resume to see the office board (done / active / blocked / ready tasks) and ${run.tCmd} inbox for any new messages from the user; `,
+    continue:
+      `Your previous session ended before the work was finished (${run.status}${run.error ? `: ${run.error}` : ""}). The user asked you to continue. ` +
+      `First run ${run.tCmd} resume to see the office board and ${run.tCmd} inbox for any new messages from the user; check what's already done in the project folder; `,
+  }[reason];
+  const prompt = intro + `then carry on with the remaining steps of the /team skill (re-spawn any teammate whose work was cut off, with the plan and what's already done). ` + HEADLESS_RULES(run);
+  const pausedMs = (run.pausedMs || 0) + (run.pausedAt ? Date.now() - run.pausedAt : 0);
+  const next = { ...run, attempts: (run.attempts || 1) + 1, resumedAt: Date.now(), pausedMs, pausedAt: undefined, endedAt: undefined };
   spawnRun(next, prompt, run.sessionId);
   emit({ ...readRun(), status: "resumed", reason });
   return true;
@@ -207,8 +169,28 @@ function resumeRun(reason = "usage") {
 /** Continue a run that paused for the user's answer (call after the answer is in the team's inbox). */
 export const continueAfterAnswer = () => resumeRun("answer");
 
-/** Start a headless /team run. `handler(run)` is called on every status change. */
-export function startRun({ project, task, allowGithub = false }, handler) {
+/**
+ * ↻ Continue: pick an interrupted / failed / stopped run up again in its own session. `runId` may be the current run
+ * or one from the history. Throws with a plain message if it can't.
+ */
+export function continueRun(runId) {
+  if (isRunning()) throw new Error("The team is busy with another run — stop it first, or wait until it's done.");
+  let run = readRun();
+  if (!run || run.id !== runId) {
+    const h = readHistory().find((x) => x.id === runId);
+    if (!h) throw new Error("That run isn't known any more.");
+    run = { ...h, task: h.task || h.title, tCmd: h.tCmd || (h.dir === ROOT ? "node tools/team-office/team.mjs" : T_CMD) };
+  }
+  if (!["failed", "interrupted", "stopped"].includes(run.status)) throw new Error("That run doesn't need continuing.");
+  if (!run.sessionId) throw new Error("That run can't be continued (it never got going) — try it again instead.");
+  if (!fs.existsSync(run.dir)) throw new Error("The project's folder is gone.");
+  writeRun(run);
+  if (!resumeRun("continue")) throw new Error("Couldn't continue that run.");
+  return readRun();
+}
+
+/** Start a headless /team run. `handler(run)` is called on every status change. Returns { run, skipped }. */
+export function startRun({ project, task, allowGithub = false, size = "standard" }, handler) {
   if (handler) onEvent = handler;
   if (isRunning()) throw new Error("A run is already in progress or waiting for a usage reset — stop it first.");
   // a run that paused for an answer the user never gave is replaced by the new one
@@ -219,24 +201,33 @@ export function startRun({ project, task, allowGithub = false }, handler) {
     emit(done);
   }
   const p = resolveProject(project);
-  prepareProject(p);
+  const { lightTeam } = readSettings();
+  const { skipped } = prepareProject(p, { lightTeam });
+  const id = new Date().toISOString().replace(/[:.]/g, "-");
+  // snapshot the files so this run can be undone (skipped for a brand-new, empty folder — nothing to go back to)
+  const checkpoint = p.isNew ? null : createCheckpoint(p.dir, id, `Dev Studio: before "${task.split("\n")[0].slice(0, 80)}"`);
 
   const tCmd = p.dir === ROOT ? "node tools/team-office/team.mjs" : T_CMD;
   const prompt =
     `/team ${task}\n\n` +
     `(HEADLESS: launched from the team office after the user confirmed in chat. The user is not watching this terminal — follow the skill's Headless mode rules.\n` +
+    `- The user is not a developer unless the task says so: apply .claude/playbooks/for-non-developers.md, and talk to them in plain words.\n` +
     `- Project directory: ${p.dir}${p.isNew ? " — a new, empty project: scaffold it here" : ""}.\n` +
+    `- Team size: ${size} (see the skill's "Team size" section).\n` +
     `- The team office CLI ("T" in the skill) is exactly: ${tCmd} — it lives outside this project; don't look for it. Your first command must be: ${tCmd} init "<one-line task summary>"\n` +
-    `- Post the plan summary with T say and wait for the user's "go" before building.\n` +
+    `- Post the plan summary with T ask and wait for the user's "go" before building.\n` +
     `- If a command is refused by permissions, do NOT try to change settings, permissions, or config and don't hunt for workarounds — tell the user what you need with T say, then continue with everything you can do without it.\n` +
+    (skipped.length ? `- This project has its own versions of: ${skipped.join(", ")} — use them as they are.\n` : "") +
     (allowGithub
       ? `- GITHUB ALLOWED for this run (the user approved it): you may git add/commit, create GitHub repos with \`gh repo create\` and \`git push\` — only what the task asks for. Never force-push, rewrite history, or delete anything on GitHub. Before pushing to a PUBLIC repo, make sure no secrets, tokens, or local absolute paths (e.g. under .claude/) are committed — gitignore .claude/ unless the task says otherwise. Post the resulting repo URL with T say.)`
       : `- Never git commit or push.)`);
 
-  const id = new Date().toISOString().replace(/[:.]/g, "-");
-  const run = { id, project: p.name, dir: p.dir, isNew: p.isNew, task, tCmd, allowGithub, attempts: 1, startedAt: Date.now(), log: path.join(LOG_DIR, `${id}.jsonl`) };
+  const run = {
+    id, project: p.name, dir: p.dir, isNew: p.isNew, task, tCmd, allowGithub, size, lightTeam,
+    checkpoint: checkpoint?.id, attempts: 1, startedAt: Date.now(), log: path.join(LOG_DIR, `${id}.jsonl`),
+  };
   spawnRun(run, prompt, null);
-  return readRun();
+  return { run: readRun(), skipped };
 }
 
 function spawnRun(run, prompt, resumeSessionId) {
@@ -244,6 +235,7 @@ function spawnRun(run, prompt, resumeSessionId) {
   const log = fs.createWriteStream(run.log, { flags: "a" }); // resumed attempts append to the same log
   const allowed = run.allowGithub ? [...ALLOWED_TOOLS, ...GITHUB_TOOLS] : ALLOWED_TOOLS;
   const args = ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits", "--strict-mcp-config", "--allowedTools", ...allowed, "--disallowedTools", ...DENIED_TOOLS];
+  if (run.lightTeam) args.push("--model", "sonnet");
   if (resumeSessionId) args.push("--resume", resumeSessionId);
   // detached on macOS/Linux = its own process group, so ■ Stop can end the lead and everything it started (killTree)
   child = spawn(CLAUDE_BIN, args, { cwd: run.dir, env: claudeEnv({ TEAM_CLI }), windowsHide: true, detached: process.platform !== "win32" });
@@ -331,8 +323,18 @@ function spawnRun(run, prompt, resumeSessionId) {
       status = "failed";
       err = `The team lead stopped early (board still at ${String(s.phase).toUpperCase()}, ${(s.tasks || []).filter((t) => t.status === "done").length}/${(s.tasks || []).length} tasks done).`;
     }
+    // how long the work took, without the time spent paused or waiting for the user (for "about N min" estimates)
+    const endedAt = Date.now();
+    const waited = (current.pausedMs || 0) + (pipelineStarted ? s.askWaitMs || 0 : 0);
+    const stats = pipelineStarted
+      ? {
+          activeMs: Math.max(0, endedAt - run.startedAt - waited),
+          buildMs: s.tasksLoadedAt ? Math.max(0, endedAt - s.tasksLoadedAt - waited) : undefined,
+          taskCount: (s.tasks || []).length,
+        }
+      : {};
     const done = {
-      ...current, sessionId, status, endedAt: Date.now(), exitCode: code,
+      ...current, ...stats, sessionId, status, endedAt, exitCode: code,
       error: err || (result?.is_error ? resultText.slice(0, 300) : undefined),
       summary: resultText ? resultText.slice(0, 1500) : undefined, // the lead's final words
     };

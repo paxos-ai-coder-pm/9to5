@@ -5,12 +5,17 @@ import { createChat } from "./chat.js";
 import { createStudio } from "./studio.js";
 import { createPhone } from "./phone.js";
 import { createPortfolio } from "./portfolio.js";
+import { createProgress } from "./progress.js";
+import { createSetup } from "./setup.js";
+import { isSimple, setView } from "./ui.js";
 
 createPhone();
 
-const chat = createChat();
+const setup = createSetup({ onSettings: () => poll() });
+const chat = createChat({ onSetup: () => setup.show() });
 const studio = createStudio({ chat });
-createPortfolio({ chat });
+const portfolio = createPortfolio({ chat });
+const progress = createProgress({ chat, getProjects: portfolio.projects, onDemo: () => setMode("demo") });
 const office = createOffice({
   canvas: document.getElementById("canvas"),
   overlay: document.getElementById("overlay"),
@@ -18,6 +23,7 @@ const office = createOffice({
   onSelect: (id) => id === "manager" && chat.open(),
 });
 
+const $ = (id) => document.getElementById(id);
 let mode = new URLSearchParams(location.search).has("demo") ? "demo" : "live";
 let state = {};
 let lastStamp = 0;
@@ -27,21 +33,38 @@ function apply(next) {
   state = { ...next, configuredModels };
   office.update(state);
   renderHeader(state);
-  renderGraph(state);
-  renderLog(state);
+  if (!isSimple()) {
+    renderGraph(state);
+    renderLog(state);
+  }
   studio.update(state, mode);
+  progress.update(state, mode);
   tick();
 }
 
+// ---- Simple (default) ⇄ Behind the scenes ----
+function paintView() {
+  const simple = isSimple();
+  $("viewSimple").setAttribute("aria-pressed", String(simple));
+  $("viewTech").setAttribute("aria-pressed", String(!simple));
+  office.setSimple(simple);
+}
+$("viewSimple").onclick = () => setView("simple");
+$("viewTech").onclick = () => setView("tech");
+window.addEventListener("viewchange", () => {
+  paintView();
+  apply(state);
+});
+
 // cheap per-second refresh for durations and the timeline's "now" line
 function tick() {
+  if (isSimple()) return; // the roster and timeline are behind the scenes
   const now = Date.now();
   renderRoster(state, now);
   renderTimeline(state, now);
 }
 
 const demo = createDemo(apply);
-const $ = (id) => document.getElementById(id);
 
 function setMode(m) {
   mode = m;
@@ -68,7 +91,7 @@ async function poll() {
     $("banner").hidden = true;
     const empty = !s.task;
     // re-render on board changes and on run status changes (paused / resumed / finished don't touch the board)
-    const stamp = `${s.updatedAt || -1}|${s.run?.status}|${s.run?.attempts}|${s.ask?.answered || s.ask?.t || ""}`;
+    const stamp = `${s.updatedAt || -1}|${s.run?.status}|${s.run?.attempts}|${s.ask?.answered || s.ask?.t || ""}|${s.studioName}|${s.minutesLeft}`;
     if (stamp !== lastStamp) {
       lastStamp = stamp;
       // A run that ended without reaching DONE leaves a stale board (phase stuck at e.g. PLAN, agents mid-task).
@@ -79,7 +102,7 @@ async function poll() {
         return apply({ ...s, phase: "idle", agents, ask: s.ask?.answered ? null : s.ask });
       }
       // Between runs only agent states (e.g. the manager answering chat), models, the run and questions matter.
-      apply(empty ? { phase: "idle", agents: s.agents || {}, models: s.models || {}, run: s.run, ask: s.ask, tasks: [], events: [] } : s);
+      apply(empty ? { phase: "idle", agents: s.agents || {}, models: s.models || {}, run: s.run, ask: s.ask, studioName: s.studioName, tasks: [], events: [] } : s);
     }
   } catch {
     $("banner").hidden = false;
@@ -98,6 +121,7 @@ $("tableBtn").onclick = (e) => {
 window.addEventListener("resize", tick);
 
 renderLegends();
+paintView();
 apply({ phase: "idle", agents: {}, tasks: [], events: [] });
 // demo mode never polls, so fetch the configured models once for the roster
 fetch("/api/state", { cache: "no-store" })
@@ -111,5 +135,8 @@ setMode(mode);
 setInterval(() => {
   poll();
   tick();
-  if (mode === "live") studio.update(state, mode); // keeps "resumes at … / in N min" text fresh
+  if (mode === "live") {
+    studio.update(state, mode); // keeps "resumes at … / in N min" text fresh
+    progress.update(state, mode);
+  }
 }, 1000);
