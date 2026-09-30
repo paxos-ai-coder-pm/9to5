@@ -11,6 +11,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO = path.resolve(HERE, "../../..");
 export const FAKE_CLAUDE = path.join(HERE, "fake-claude.mjs");
 export const FAKE_OPENER = path.join(HERE, "fake-opener.mjs");
+export const FAKE_BROWSER = path.join(HERE, "fake-browser.mjs");
 export const isWindows = process.platform === "win32";
 
 export function makeStudio() {
@@ -71,7 +72,7 @@ export async function startServer(studio, { env = {}, control = {} } = {}) {
       DEVSTUDIO_OPENER: FAKE_OPENER,
       FAKE_CONTROL: controlFile,
       FAKE_LOG: logFile,
-      DEVSTUDIO_CHROME: "",
+      DEVSTUDIO_CHROME: "", // no pictures unless a test asks for them
       ...env,
     },
     stdio: ["ignore", "pipe", "pipe"],

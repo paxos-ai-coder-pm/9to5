@@ -1,5 +1,5 @@
-// Unit tests for the office's pure modules. Run: node --test tools/team-office/test/
-import { test } from "node:test";
+// Unit tests for the office's pure modules. Run: npm test
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -15,7 +15,15 @@ import { createCheckpoint, restoreCheckpoint, gitAvailable, hasCheckpoint } from
 import { parseAuthStatus } from "../health.mjs";
 import { createStreamParser } from "../stream.mjs";
 
-const tmpdir = () => fs.mkdtempSync(path.join(os.tmpdir(), "devstudio-unit-"));
+const temps = [];
+const tmpdir = () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "devstudio-unit-"));
+  temps.push(dir);
+  return dir;
+};
+after(() => {
+  for (const dir of temps) fs.rmSync(dir, { recursive: true, force: true });
+});
 
 // ---------- manager directives ----------
 test("directives: plain reply has no directives", () => {

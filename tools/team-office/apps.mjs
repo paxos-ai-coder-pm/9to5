@@ -8,7 +8,7 @@ import os from "node:os";
 import net from "node:net";
 import http from "node:http";
 import path from "node:path";
-import { spawn, execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { DIR, killTree } from "./lib.mjs";
 import { readManifest, insidePath } from "./manifest.mjs";
 
@@ -214,6 +214,7 @@ export function stopApp(dir) {
 }
 export function stopAllApps() {
   for (const dir of apps.keys()) stopApp(dir);
+  for (const shot of shots) shot.stop(); // a picture being taken when the office closes
 }
 
 // ---------- show files ----------
@@ -242,7 +243,7 @@ export function showFiles(dir) {
 
 // ---------- screenshot ----------
 export function findBrowser() {
-  if (process.env.DEVSTUDIO_CHROME) return process.env.DEVSTUDIO_CHROME;
+  if (process.env.DEVSTUDIO_CHROME !== undefined) return process.env.DEVSTUDIO_CHROME || null; // set but empty = no pictures
   const pf = [process.env.PROGRAMFILES, process.env["PROGRAMFILES(X86)"], process.env.LOCALAPPDATA].filter(Boolean);
   const candidates =
     process.platform === "win32"
@@ -254,6 +255,66 @@ export function findBrowser() {
 }
 export const screenshotPath = (dir) => path.join(dir, ".claude", "devstudio", "screenshot.png");
 let lastShotError = null;
+const shots = new Set(); // browsers taking a picture right now
+const SHOT_TIMEOUT_MS = 60000;
+const SHOT_PREFIX = "devstudio-shot-";
+
+// Run the browser once, in its own process group, and always stop the whole group afterwards: its helpers
+// (GPU, network, renderers) must not outlive it, a hung browser, or the office.
+// Resolves to { text: "exit …: what it said", stopped: whether it was stopped (timed out / the office closing) }.
+function runBrowser(browser, args, env) {
+  return new Promise((resolve) => {
+    const posix = process.platform !== "win32";
+    const child = spawn(browser, args, { env, windowsHide: true, detached: posix, stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    let ended = false;
+    let stopped = false;
+    const collect = (d) => (out = (out + d).slice(-65536));
+    child.stdout.on("data", collect);
+    child.stderr.on("data", collect);
+    const shot = {
+      stop: () => {
+        stopped = true;
+        if (child.exitCode === null && child.signalCode === null) killTree(child.pid);
+      },
+    };
+    shots.add(shot);
+    const timer = setTimeout(shot.stop, SHOT_TIMEOUT_MS);
+    let grace = null;
+    const end = (what) => {
+      if (ended) return;
+      ended = true;
+      clearTimeout(timer);
+      clearTimeout(grace);
+      shots.delete(shot);
+      const said = out.split("\n").filter((l) => l.trim() && !/crashpad|cpufreq/.test(l)).slice(-12).join("\n");
+      resolve({ text: `${what}${said ? `: ${said}` : ""}`, stopped });
+    };
+    const status = (code, signal) => `exit ${code ?? signal ?? "?"}`;
+    child.once("error", (e) => end(e.code || e.message));
+    child.once("exit", (code, signal) => {
+      if (posix)
+        try {
+          process.kill(-child.pid, "SIGTERM"); // helpers still in its group
+        } catch {}
+      grace = setTimeout(() => end(status(code, signal)), 2000); // a helper elsewhere may hold the output open
+    });
+    child.once("close", (code, signal) => end(status(code, signal)));
+  });
+}
+
+// Profiles left behind when the office was closed (or the computer turned off) during a picture.
+function removeOldProfiles(tmp) {
+  try {
+    for (const name of fs.readdirSync(tmp)) {
+      if (!name.startsWith(SHOT_PREFIX)) continue;
+      const p = path.join(tmp, name);
+      try {
+        if (Date.now() - fs.statSync(p).mtimeMs > 3600000) fs.rmSync(p, { recursive: true, force: true });
+      } catch {}
+    }
+  } catch {}
+}
 /** Why the last screenshot attempt produced no picture (null if it worked). */
 export const screenshotError = () => lastShotError;
 
@@ -262,6 +323,7 @@ export async function captureScreenshot(project) {
   const browser = findBrowser();
   if (!browser) return null;
   const wasRunning = apps.get(project.dir)?.status === "running";
+  let profile = null;
   try {
     let st = await openApp(project);
     const deadline = Date.now() + START_TIMEOUT_MS + INSTALL_TIMEOUT_MS;
@@ -276,21 +338,14 @@ export async function captureScreenshot(project) {
     fs.rmSync(fresh, { force: true });
     // Chrome makes Unix sockets in its temp folder (≈108-character path limit): use a short one where there is one
     const tmp = process.platform !== "win32" && fs.existsSync("/tmp") ? "/tmp" : os.tmpdir();
-    const profile = fs.mkdtempSync(path.join(tmp, "devstudio-shot-"));
+    removeOldProfiles(tmp);
+    profile = fs.mkdtempSync(path.join(tmp, SHOT_PREFIX));
     const args = ["--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run", "--no-default-browser-check", `--user-data-dir=${profile}`, "--window-size=1280,800", "--virtual-time-budget=4000", `--screenshot=${fresh}`, st.url];
-    // resolves to what went wrong (exit status + the browser's own output), or null when it exited cleanly
-    const shoot = (extra) =>
-      new Promise((resolve) =>
-        execFile(browser, [...extra, ...args], { timeout: 60000, windowsHide: true, env: { ...process.env, TMPDIR: tmp } }, (err, stdout, stderr) => {
-          const said = `${stdout || ""}${stderr || ""}`.split("\n").filter((l) => l.trim() && !/crashpad|cpufreq/.test(l)).slice(-12).join("\n");
-          resolve({ failed: !!err, text: `${err ? `exit ${err.code ?? err.signal ?? "?"}` : "exit 0"}${said ? `: ${said}` : ""}` });
-        }),
-      );
+    const env = { ...process.env, TMPDIR: tmp };
     const linux = process.platform === "linux";
-    const tries = [await shoot(linux && process.getuid?.() === 0 ? ["--no-sandbox"] : [])];
+    const tries = [await runBrowser(browser, [...(linux && process.getuid?.() === 0 ? ["--no-sandbox"] : []), ...args], env)];
     // Linux containers / AppArmor often have no usable sandbox; the page is the user's own app on localhost
-    if (!fs.existsSync(fresh) && linux) tries.push(await shoot(["--no-sandbox"]));
-    fs.rmSync(profile, { recursive: true, force: true });
+    if (!fs.existsSync(fresh) && linux && !tries[0].stopped) tries.push(await runBrowser(browser, ["--no-sandbox", ...args], env));
     if (!fs.existsSync(fresh)) {
       lastShotError = `no picture from ${path.basename(browser)} (${tries.map((t) => t.text).join(" | then: ")})`;
       return null;
@@ -302,6 +357,9 @@ export async function captureScreenshot(project) {
     lastShotError = e.message;
     return null;
   } finally {
+    try {
+      if (profile) fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+    } catch {} // still in use (Windows): removed by a later picture
     if (!wasRunning) stopApp(project.dir);
   }
 }

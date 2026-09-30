@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
 import { execFileSync } from "node:child_process";
-import { makeStudio, until, FAKE_OPENER } from "./helpers.mjs";
+import { makeStudio, until, FAKE_OPENER, FAKE_BROWSER, isWindows } from "./helpers.mjs";
 
 let s, settings, projects, apps, lib;
 before(async () => {
@@ -215,4 +215,58 @@ test("apps: a screenshot of the result is taken with a headless browser", { skip
   assert.equal(fs.readFileSync(file).subarray(1, 4).toString(), "PNG");
   assert.equal(apps.appStatus(p.dir).status, "stopped", "an app started just for the picture is stopped again");
   delete process.env.DEVSTUDIO_CHROME;
+});
+
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+// the fake browser (test/fake-browser.mjs) leaves a helper process behind, like Chrome's GPU / network helpers
+async function withFakeBrowser(mode, fn) {
+  const log = path.join(s.tmp, `browser-${mode}.json`);
+  Object.assign(process.env, { DEVSTUDIO_CHROME: FAKE_BROWSER, FAKE_BROWSER: mode, FAKE_BROWSER_LOG: log });
+  try {
+    await fn(() => (fs.existsSync(log) ? JSON.parse(fs.readFileSync(log, "utf8")) : null));
+  } finally {
+    for (const k of ["DEVSTUDIO_CHROME", "FAKE_BROWSER", "FAKE_BROWSER_LOG"]) delete process.env[k];
+  }
+}
+
+test("apps: no browser processes or temporary profiles are left behind after a picture", { skip: isWindows && "needs a POSIX shell" }, () =>
+  withFakeBrowser("ok", async (seen) => {
+    const p = makeProject("shot-clean", { "index.html": "<h1>Hi</h1>", "devstudio.json": { name: "Clean", kind: "static", howTo: ["Open"] } });
+    const file = await apps.captureScreenshot(p);
+    assert.ok(file && fs.existsSync(file), `picture written (${apps.screenshotError()})`);
+    const b = seen();
+    await until(() => !alive(b.helper), 5000, "the browser's helper process stopped");
+    assert.equal(fs.existsSync(b.profile), false, "temporary browser profile removed");
+  }));
+
+test("apps: closing the office during a picture stops the browser", { skip: isWindows && "needs a POSIX shell" }, () =>
+  withFakeBrowser("hang", async (seen) => {
+    const p = makeProject("shot-hang", { "index.html": "<h1>Hi</h1>", "devstudio.json": { name: "Hang", kind: "static", howTo: ["Open"] } });
+    const shot = apps.captureScreenshot(p);
+    const b = await until(seen, 10000, "browser started");
+    assert.ok(alive(b.pid) && alive(b.helper));
+    apps.stopAllApps(); // what the office does when it's closed
+    assert.equal(await shot, null);
+    assert.match(apps.screenshotError(), /no picture from fake-browser\.mjs \(exit SIGTERM/);
+    await until(() => !alive(b.pid) && !alive(b.helper), 5000, "browser and helper stopped");
+    assert.equal(fs.existsSync(b.profile), false, "temporary browser profile removed");
+  }));
+
+test("apps: an empty DEVSTUDIO_CHROME turns pictures off", async () => {
+  process.env.DEVSTUDIO_CHROME = "";
+  try {
+    assert.equal(apps.findBrowser(), null);
+    const p = makeProject("shot-off", { "index.html": "x", "devstudio.json": { name: "Off", kind: "static", howTo: ["Open"] } });
+    assert.equal(await apps.captureScreenshot(p), null);
+    assert.equal(apps.appStatus(p.dir)?.status ?? "not started", "not started", "the app isn't started for nothing");
+  } finally {
+    delete process.env.DEVSTUDIO_CHROME;
+  }
 });

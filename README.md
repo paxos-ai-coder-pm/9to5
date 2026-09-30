@@ -103,7 +103,7 @@ A small, focused library instead of dozens of agents: `.claude/playbooks/`.
 3. Add the office to `.claude/launch.json` (see the one in this repo), or run it directly: `node tools/team-office/server.mjs 4400`.
 4. Restart Claude Code, then run `/team <what you want built>`.
 
-The office calls the `claude` CLI (`claude -p --agent manager` for the chat, `claude -p "/team …"` for runs), so it must be installed and signed in for the environment the server runs in; set `CLAUDE_BIN` to point at a specific binary. It strips stale non-Claude model overrides from its environment when talking to Anthropic. `DEVSTUDIO_PROJECTS` overrides the projects folder; `DEVSTUDIO_PORT` the launcher's port.
+The office calls the `claude` CLI (`claude -p --agent manager` for the chat, `claude -p "/team …"` for runs), so it must be installed and signed in for the environment the server runs in; set `CLAUDE_BIN` to point at a specific binary. It strips stale non-Claude model overrides from its environment when talking to Anthropic. `DEVSTUDIO_PROJECTS` overrides the projects folder; `DEVSTUDIO_PORT` the launcher's port; `DEVSTUDIO_CHROME` the browser used for project pictures (set it empty for no pictures).
 
 **Upgrading from an older version:** new projects now go to `~/DevStudioProjects` instead of next to this repo. Projects you already built keep working from their old folders (they're found through the run history). To keep creating projects next to this repo, set **⚙ Settings → Where projects are saved** to this repo's parent folder.
 

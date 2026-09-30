@@ -167,9 +167,12 @@ describe("chat with the manager", opts, () => {
   });
 });
 
+// the browser the product would use (Chrome / Edge / Chromium), or Playwright's Chromium when that's all there is
+const browser = [process.env.CHROMIUM_PATH, "/opt/pw-browsers/chromium"].filter(Boolean).find((c) => fs.existsSync(c)) || (await import("../apps.mjs")).findBrowser() || "";
+
 describe("a whole run: plan → build → deliver → open → change → undo", opts, () => {
   let t, proj;
-  before(async () => (t = await setup({ lead: "finish" }, { DEVSTUDIO_CHROME: ["/opt/pw-browsers/chromium", "/usr/bin/chromium"].find((c) => fs.existsSync(c)) || "" })));
+  before(async () => (t = await setup({ lead: "finish" }, { DEVSTUDIO_CHROME: browser })));
   after(() => t.done());
 
   test("the run finishes with a plain report and an Open button", async () => {
@@ -216,7 +219,7 @@ describe("a whole run: plan → build → deliver → open → change → undo",
     assert.equal((await t.srv.api("/api/projects", { method: "POST", body: { action: "stop", id: proj.id } })).json.ok, true);
   });
 
-  test("a picture of the result is taken after the run (when a browser is available)", { skip: !fs.existsSync("/opt/pw-browsers/chromium") && "no chromium" }, async () => {
+  test("a picture of the result is taken after the run (when a browser is available)", { skip: !browser && "no Chrome/Chromium installed" }, async () => {
     const r = await until(async () => {
       const x = await t.srv.api(`/api/projects/${proj.id}/screenshot`);
       return x.status === 200 ? x : null;
