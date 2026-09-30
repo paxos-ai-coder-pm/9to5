@@ -20,6 +20,7 @@
 //   node tools/team-office/team.mjs lessons                    # print this project's + global lessons
 //   node tools/team-office/team.mjs resume                     # print active / ready / blocked work
 import fs from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";

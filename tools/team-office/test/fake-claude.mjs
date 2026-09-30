@@ -80,6 +80,11 @@ function lead(mode, session) {
     T("say", "manager", "Pausing — I'll carry on as soon as you answer.");
     return done("Paused for the user's answer.");
   }
+  if (mode === "askopts") {
+    T("phase", "plan");
+    T("ask", "architect", "Which layout do you prefer?", "--options", "Cards|List");
+    return done("Paused for the user's answer.");
+  }
   if (mode === "early") {
     T("phase", "build");
     return done("I stopped halfway.");

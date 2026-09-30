@@ -14,9 +14,29 @@ Their journey has seven steps. Today the studio is strong in the middle (describ
 | 6. Change it | Tell the manager → a full 8-agent run again | ⚠️ slow for small tweaks |
 | 7. Share it | Publish to GitHub (a developer's idea of sharing) | ⚠️ |
 
+## Status (implemented on this branch)
+
+| Area | Status |
+|---|---|
+| Bug fixes (Stop on macOS/Linux, false "finished", stale inbox, DNS rebinding / crash, Merage Hub alias, Node 18 `crypto` crash) | ✅ done, tested |
+| P0 "Built" → "I can use it": `devstudio.json` + `T deliver`, ▶ Open (static / web on `$PORT` / script / how-to), launch page, 📂 Show files, screenshot, plain report card (`T report`), START-HERE + start files in the playbook | ✅ done, tested (office side); the team's side is instructions — not yet exercised with a real model run |
+| P0 Simple view by default, friendly names, plain steps, "Right now" card, FIX only when it happens, Behind the scenes toggle | ✅ done, tested |
+| P0 Setup checklist, instant "not signed in" answer, macOS/Linux launcher, `Dev Studio.command` | ✅ done, tested · ◐ no desktop-app wrapper or `npx devstudio` yet |
+| P1 Guided brief (CHOICES buttons), plain-language plan approval, `T ask --options` | ✅ done, tested (UI + CLI); the manager/lead wording is instructions |
+| P1 Team sizes, lighter team, `T wait`, time estimates | ✅ done, tested · ◐ lighter team can't change the reviewer/architect model for runs on the studio itself (its agent files are the originals) |
+| P1 Non-developer playbook + agent instructions | ✅ written |
+| P1 Dedicated projects folder, foreign-folder warning, safe seeding, checkpoints + ↶ Undo / ↷ Redo, verify-command guard, gh deny fix | ✅ done, tested |
+| P1 ↻ Continue, ↻ Try again, friendly failures, queue | ✅ done, tested |
+| P1 Readability & accessibility (bundled fonts, sizes, contrast, motion, light theme, dialogs, tabs, live region) | ✅ done, tested (contrast computed, keyboard paths in browser tests) |
+| P2 ✎ Change something, 🌐 Put it online (GitHub Pages via a publishing run), ⬇ Share a copy, history + undo, Remove from list | ✅ done · ◐ "Put it online" not tested against real GitHub; server apps can't use Pages |
+| P2 Phone QR code | ✅ done · ◐ PIN-protected phone web view not done |
+| P2 Tests + CI, top-level error handler, configurable name | ✅ 84 tests (unit, CLI, projects/apps, integration with a fake `claude`, browser) + GitHub Actions on Linux/macOS/Windows |
+
+Still open: a real end-to-end run with Claude to tune the new agent instructions; starting an npm-installed `claude.cmd` on Windows (the office currently needs the Windows installer's `claude.exe`); a desktop wrapper / `npx devstudio`; hosting for apps that need a server; a sandboxed mode for untrusted work.
+
 ---
 
-## ✅ Already fixed on this branch
+## ✅ Fixed first (before the roadmap work)
 
 These were verified bugs (reproduced before the fix, re-tested after with a fake `claude` binary). Each one broke a non-developer's experience directly.
 

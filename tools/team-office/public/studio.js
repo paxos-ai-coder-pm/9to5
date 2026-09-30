@@ -13,7 +13,7 @@ const PHASE_TEXT = {
 };
 const who = (id) => (isSimple() ? AGENT_BY_ID[id]?.name || id : `The ${id}`);
 
-export function createStudio({ chat }) {
+export function createStudio({ chat, setup }) {
   const $ = (id) => document.getElementById(id);
   let state = {};
   let mode = "live";
@@ -55,6 +55,7 @@ export function createStudio({ chat }) {
     if (run?.status === "needs-answer") return "⏸ The team paused until you answer its question";
     if (run?.status === "finished" && Date.now() - (run.endedAt || 0) < 6 * 3600e3) return `✅ Finished: ${run.project} — press ▶ Open to try it`;
     if (["failed", "interrupted"].includes(run?.status) && Date.now() - (run.endedAt || 0) < 6 * 3600e3) return `⚠ The last run didn't finish — you can continue it or ask the manager what happened`;
+    if (setup?.ready() === false) return "⚙ Almost ready — finish the setup below, then tell the manager what to build";
     return "Ready — tell the manager what to build";
   }
 

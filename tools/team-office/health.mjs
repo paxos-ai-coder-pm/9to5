@@ -27,11 +27,12 @@ export function parseAuthStatus(stdout) {
   }
 }
 
-const installClaude = {
-  text: "Install Claude Code (the app the team runs on), then click Check again.",
-  command: "npm install -g @anthropic-ai/claude-code",
-  link: "https://claude.com/claude-code",
-};
+// On Windows the office starts `claude` directly, which finds claude.exe (the Windows installer) but not the
+// claude.cmd that an npm install creates — so don't suggest npm there.
+const installClaude =
+  process.platform === "win32"
+    ? { text: "Install Claude Code for Windows (the app the team runs on) from its website, then click Check again.", link: "https://claude.com/claude-code" }
+    : { text: "Install Claude Code (the app the team runs on), then click Check again.", command: "npm install -g @anthropic-ai/claude-code", link: "https://claude.com/claude-code" };
 
 /**
  * Run every check. `extra` supplies things the server already knows: { githubAccount, projectsDir }.
@@ -47,7 +48,7 @@ export async function checkHealth({ githubAccount = null, projectsDir } = {}) {
   ]);
   const checks = [];
   const nodeMajor = Number(process.versions.node.split(".")[0]);
-  checks.push({ id: "node", label: "Node.js", ok: nodeMajor >= 18, required: true, detail: `Version ${process.versions.node}`, fix: nodeMajor >= 18 ? undefined : { text: "Install Node.js 18 or newer.", link: "https://nodejs.org" } });
+  checks.push({ id: "node", label: "Node.js", ok: nodeMajor >= 20, required: true, detail: `Version ${process.versions.node}`, fix: nodeMajor >= 20 ? undefined : { text: "Install Node.js 20 or newer.", link: "https://nodejs.org" } });
 
   checks.push({
     id: "claude",

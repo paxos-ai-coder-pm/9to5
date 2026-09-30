@@ -13,7 +13,7 @@ createPhone();
 
 const setup = createSetup({ onSettings: () => poll() });
 const chat = createChat({ onSetup: () => setup.show() });
-const studio = createStudio({ chat });
+const studio = createStudio({ chat, setup });
 const portfolio = createPortfolio({ chat });
 const progress = createProgress({ chat, getProjects: portfolio.projects, onDemo: () => setMode("demo") });
 const office = createOffice({
@@ -27,6 +27,8 @@ const $ = (id) => document.getElementById(id);
 let mode = new URLSearchParams(location.search).has("demo") ? "demo" : "live";
 let state = {};
 let lastStamp = 0;
+let lastRunStatus;
+window.addEventListener("portfolio", () => progress.update(state, mode));
 let configuredModels = {}; // from the agents' definitions; shown until a run reports actual models
 
 function apply(next) {
@@ -94,6 +96,11 @@ async function poll() {
     const stamp = `${s.updatedAt || -1}|${s.run?.status}|${s.run?.attempts}|${s.ask?.answered || s.ask?.t || ""}|${s.studioName}|${s.minutesLeft}`;
     if (stamp !== lastStamp) {
       lastStamp = stamp;
+      // a run that just finished (or started) changes the projects — don't wait for the next refresh
+      if (s.run?.status !== lastRunStatus) {
+        lastRunStatus = s.run?.status;
+        portfolio.refresh();
+      }
       // A run that ended without reaching DONE leaves a stale board (phase stuck at e.g. PLAN, agents mid-task).
       // Show it as idle so nobody looks busy; the tasks and log stay visible for reference.
       const ended = s.run && !["running", "waiting", "needs-answer"].includes(s.run.status);

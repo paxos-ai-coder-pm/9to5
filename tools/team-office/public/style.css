@@ -387,7 +387,8 @@ td.muted { color: var(--text-muted); }
 .report { background: var(--surface-2); padding: 8px 10px; box-shadow: inset 0 0 0 2px var(--good); }
 .report h4 { font-weight: 400; margin: 6px 0 2px; color: var(--good-text); font-size: 19px; letter-spacing: 1px; }
 .report h4:first-child { margin-top: 0; }
-.report ul { margin: 0; padding-left: 20px; color: var(--text-primary); }
+.report ul { margin: 0; padding-left: 22px; color: var(--text-primary); }
+.chat-log .report li { display: list-item; max-width: none; } /* not a chat message: keep the bullets */
 .proposal { margin-top: 4px; padding: 8px 10px; background: var(--proposal); color: var(--text-primary); box-shadow: inset 0 0 0 2px var(--good); display: flex; flex-direction: column; gap: 6px; }
 .proposal .p-head { font-size: 18px; letter-spacing: 1px; color: var(--good-text); }
 .proposal .p-task { line-height: 1.15; white-space: pre-wrap; max-height: 220px; overflow-y: auto; }

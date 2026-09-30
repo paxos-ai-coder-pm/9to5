@@ -117,6 +117,8 @@ export function createSetup({ onSettings } = {}) {
   setInterval(() => !health?.ready && load(), 60000); // keep checking while something is missing
 
   return {
+    // false while something required (Claude installed / signed in) is missing; null until the first check
+    ready: () => (health ? health.checks.filter((c) => c.required).every((c) => c.ok || c.unknown) : null),
     // from a chat "setup" button: show the checklist (refreshed)
     show() {
       forced = true;

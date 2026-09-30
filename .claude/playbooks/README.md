@@ -1,10 +1,11 @@
 # Playbooks
 
-Short, practical guides the team reads before working. Every agent reads `_core.md`. The architect picks the relevant stack and practice playbooks for each run and names them in the plan; each agent reads those before starting.
+Short, practical guides the team reads before working. Every agent reads `_core.md` and — unless the user is a developer — `for-non-developers.md`. The architect picks the relevant stack and practice playbooks for each run and names them in the plan; each agent reads those before starting.
 
 ## Practices
 | Playbook | Use for |
 |---|---|
+| `for-non-developers.md` | Building for someone who isn't a developer: lightest stack, their data safe, one-click open (`devstudio.json`, START-HERE.md), plain words |
 | `testing.md` | Test-first loop, what to test, unit vs integration vs e2e |
 | `review.md` | Code review checklist (reviewer, and devs self-review) |
 | `security.md` | OWASP-style checklist, secrets, auth, input handling |

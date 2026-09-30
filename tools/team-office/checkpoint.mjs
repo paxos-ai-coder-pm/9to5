@@ -44,7 +44,8 @@ const tempIndex = () => path.join(os.tmpdir(), `devstudio-index-${crypto.randomU
 const norm = (p) => (process.platform === "win32" ? path.resolve(p).toLowerCase() : path.resolve(p));
 export const isRepo = (dir) => {
   try {
-    return norm(git(dir, ["rev-parse", "--show-toplevel"])) === norm(fs.realpathSync(dir));
+    // realpathSync.native: resolves symlinks (macOS /var → /private/var) and Windows 8.3 short names like RUNNER~1
+    return norm(fs.realpathSync.native(git(dir, ["rev-parse", "--show-toplevel"]))) === norm(fs.realpathSync.native(dir));
   } catch {
     return false;
   }

@@ -6,6 +6,7 @@
 // Chat replies come from the `manager` agent (.claude/agents/manager.md) via the Claude Code CLI in headless mode
 // (`claude -p --agent manager`), so they use your existing Claude Code login. Set CLAUDE_BIN to override the binary.
 import http from "node:http";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFile } from "node:child_process";

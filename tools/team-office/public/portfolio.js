@@ -108,6 +108,7 @@ export function createPortfolio({ chat }) {
         lastHtml = html;
         host.innerHTML = html;
       }
+      window.dispatchEvent(new CustomEvent("portfolio")); // the "Right now" card uses the projects too
     } catch {
       host.innerHTML = `<p class="empty-note">Can't reach the office.</p>`;
       lastHtml = "";
