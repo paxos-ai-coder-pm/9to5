@@ -40,6 +40,7 @@ test("settings: defaults, validation and the projects-folder override", () => {
   assert.throws(() => settings.updateSettings({ studioName: "<script>" }), /1–40/);
   assert.throws(() => settings.updateSettings({ projectsDir: "relative/dir" }), /full folder path/);
   assert.throws(() => settings.updateSettings({ projectsDir: s.root }), /inside the Dev Studio/);
+  assert.throws(() => settings.updateSettings({ projectsDir: path.join(s.root, "not-yet", "made") }), /inside the Dev Studio/);
   const next = settings.updateSettings({ studioName: "  Priya's   Studio ", lightTeam: 1 });
   assert.equal(next.studioName, "Priya's Studio");
   assert.equal(next.lightTeam, true);
@@ -55,7 +56,7 @@ test("resolveProject: new names go to the projects folder; the studio itself onl
   assert.equal(p.dir, path.join(s.projects, "family-budget"));
   assert.equal(p.isNew, true);
   assert.equal(p.foreign, false);
-  assert.equal(projects.resolveProject(".").dir, s.root);
+  assert.equal(projects.resolveProject(".").dir, fs.realpathSync(s.root)); // module paths are real paths (macOS /private/var)
   assert.equal(projects.resolveProject("merage-hub").dir, path.join(s.projects, "merage-hub"), "no more hidden aliases");
   assert.throws(() => projects.resolveProject("../etc"), /valid project folder name/);
   assert.throws(() => projects.resolveProject("Has Spaces"), /valid project folder name/);
@@ -204,12 +205,12 @@ test("apps: show files hands the folder to the system file manager", async () =>
   await until(() => fs.existsSync(process.env.FAKE_LOG + ".opener") && fs.readFileSync(process.env.FAKE_LOG + ".opener", "utf8").includes(p.dir), 5000, "opener called");
 });
 
-const chrome = ["/opt/pw-browsers/chromium", "/usr/bin/chromium", "/usr/bin/google-chrome"].find((c) => fs.existsSync(c));
+const chrome = [process.env.CHROMIUM_PATH, "/opt/pw-browsers/chromium", "/usr/bin/chromium", "/usr/bin/google-chrome"].filter(Boolean).find((c) => fs.existsSync(c));
 test("apps: a screenshot of the result is taken with a headless browser", { skip: !chrome && "no Chrome/Chromium installed" }, async () => {
   process.env.DEVSTUDIO_CHROME = chrome;
   const p = makeProject("shot-me", { "index.html": "<body style='background:#3987e5'><h1>Hello</h1></body>", "devstudio.json": { name: "Shot", kind: "static", howTo: ["Open"] } });
   const file = await apps.captureScreenshot(p);
-  assert.ok(file && fs.existsSync(file), "screenshot written");
+  assert.ok(file && fs.existsSync(file), `screenshot written (${apps.screenshotError()})`);
   assert.equal(fs.readFileSync(file).subarray(1, 4).toString(), "PNG");
   assert.equal(apps.appStatus(p.dir).status, "stopped", "an app started just for the picture is stopped again");
   delete process.env.DEVSTUDIO_CHROME;

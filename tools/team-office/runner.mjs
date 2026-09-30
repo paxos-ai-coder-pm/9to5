@@ -66,7 +66,7 @@ function recordHistory(run) {
   const entry = {
     id: run.id, project: run.project, dir: run.dir, title: String(run.task || "").split("\n")[0].slice(0, 200), task: String(run.task || "").slice(0, 8000),
     status: run.status, startedAt: run.startedAt, endedAt: run.endedAt || Date.now(), attempts: run.attempts || 1,
-    allowGithub: !!run.allowGithub, size: run.size || "standard", isNew: !!run.isNew, checkpoint: run.checkpoint || undefined,
+    allowGithub: !!run.allowGithub, size: run.size || "standard", lightTeam: !!run.lightTeam, isNew: !!run.isNew, checkpoint: run.checkpoint || undefined,
     sessionId: run.sessionId || undefined, tCmd: run.tCmd, log: run.log,
     activeMs: run.activeMs, buildMs: run.buildMs, taskCount: run.taskCount,
     summary: run.summary ? String(run.summary).slice(0, 1200) : undefined, error: run.error,
@@ -156,11 +156,15 @@ function resumeRun(reason = "usage") {
       `First run ${run.tCmd} resume to see the office board (done / active / blocked / ready tasks) and ${run.tCmd} inbox for any new messages from the user; `,
     continue:
       `Your previous session ended before the work was finished (${run.status}${run.error ? `: ${run.error}` : ""}). The user asked you to continue. ` +
-      `First run ${run.tCmd} resume to see the office board and ${run.tCmd} inbox for any new messages from the user; check what's already done in the project folder; `,
+      (run.boardIsOld
+        ? `The office board now shows a later run, not yours: run ${run.tCmd} init "<one-line summary of this task>" and load your execution graph again with ${run.tCmd} tasks (mark what's already done with ${run.tCmd} task <id> done), then check ${run.tCmd} inbox; `
+        : `First run ${run.tCmd} resume to see the office board and ${run.tCmd} inbox for any new messages from the user; `) +
+      `check what's already done in the project folder; `,
   }[reason];
   const prompt = intro + `then carry on with the remaining steps of the /team skill (re-spawn any teammate whose work was cut off, with the plan and what's already done). ` + HEADLESS_RULES(run);
   const pausedMs = (run.pausedMs || 0) + (run.pausedAt ? Date.now() - run.pausedAt : 0);
-  const next = { ...run, attempts: (run.attempts || 1) + 1, resumedAt: Date.now(), pausedMs, pausedAt: undefined, endedAt: undefined };
+  // a continued run is judged by the board from now on (the lead re-inits it if it was another run's)
+  const next = { ...run, attempts: (run.attempts || 1) + 1, resumedAt: Date.now(), pausedMs, pausedAt: undefined, endedAt: undefined, boardIsOld: undefined, ...(run.boardIsOld ? { startedAt: Date.now() } : {}) };
   spawnRun(next, prompt, run.sessionId);
   emit({ ...readRun(), status: "resumed", reason });
   return true;
@@ -175,15 +179,23 @@ export const continueAfterAnswer = () => resumeRun("answer");
  */
 export function continueRun(runId) {
   if (isRunning()) throw new Error("The team is busy with another run — stop it first, or wait until it's done.");
-  let run = readRun();
+  const current = readRun();
+  let run = current;
   if (!run || run.id !== runId) {
     const h = readHistory().find((x) => x.id === runId);
     if (!h) throw new Error("That run isn't known any more.");
-    run = { ...h, task: h.task || h.title, tCmd: h.tCmd || (h.dir === ROOT ? "node tools/team-office/team.mjs" : T_CMD) };
+    // the office board shows the latest run, not this one — the lead must set it up again for this work
+    run = { ...h, task: h.task || h.title, tCmd: h.tCmd || (h.dir === ROOT ? "node tools/team-office/team.mjs" : T_CMD), boardIsOld: true };
   }
   if (!["failed", "interrupted", "stopped"].includes(run.status)) throw new Error("That run doesn't need continuing.");
   if (!run.sessionId) throw new Error("That run can't be continued (it never got going) — try it again instead.");
   if (!fs.existsSync(run.dir)) throw new Error("The project's folder is gone.");
+  // a different run that was paused for the user's answer is replaced (and kept in the history)
+  if (current && current.id !== run.id && current.status === "needs-answer") {
+    const done = { ...current, status: "stopped", endedAt: Date.now() };
+    writeRun(done);
+    emit(done);
+  }
   writeRun(run);
   if (!resumeRun("continue")) throw new Error("Couldn't continue that run.");
   return readRun();

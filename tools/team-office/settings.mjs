@@ -25,6 +25,23 @@ export function readSettings() {
   }
 }
 
+// The real location of a path that may not exist yet: the deepest existing folder, symlinks resolved
+// (macOS /var → /private/var), plus the rest — so "inside the studio" is caught however the path is written.
+function realPath(p) {
+  let cur = path.resolve(p);
+  const rest = [];
+  while (!fs.existsSync(cur)) {
+    const up = path.dirname(cur);
+    if (up === cur) break;
+    rest.unshift(path.basename(cur));
+    cur = up;
+  }
+  try {
+    cur = fs.realpathSync.native(cur);
+  } catch {}
+  return path.join(cur, ...rest);
+}
+
 export function projectsRoot() {
   return path.resolve(process.env.DEVSTUDIO_PROJECTS || readSettings().projectsDir || defaultProjectsDir());
 }
@@ -45,7 +62,9 @@ export function updateSettings(patch = {}) {
       const dir = path.resolve(raw.replace(/^~(?=$|[\\/])/, os.homedir()));
       if (!path.isAbsolute(raw) && !raw.startsWith("~")) throw new Error("Use a full folder path, like " + defaultProjectsDir());
       if (dir === path.parse(dir).root) throw new Error("Pick a folder, not a whole drive.");
-      if (dir === ROOT || dir.startsWith(ROOT + path.sep)) throw new Error("Projects can't live inside the Dev Studio's own folder.");
+      const real = realPath(dir);
+      const root = realPath(ROOT);
+      if (real === root || real.startsWith(root + path.sep)) throw new Error("Projects can't live inside the Dev Studio's own folder.");
       try {
         fs.mkdirSync(dir, { recursive: true });
         fs.accessSync(dir, fs.constants.W_OK);

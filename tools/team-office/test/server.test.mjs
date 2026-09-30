@@ -336,6 +336,31 @@ describe("stop, continue, try again", opts, () => {
   });
 });
 
+describe("continuing an older run", opts, () => {
+  test("after another run used the board, the lead is told to set it up again — and the run finishes", async () => {
+    const t = await setup({ lead: "long", onResume: "finish" });
+    await t.proposeAndStart(PROPOSE("older-app"));
+    await t.waitRun("running");
+    await until(() => (t.s.read("state.json").agents["dev-1"].state === "working" ? 1 : 0), 10000, "lead working");
+    await t.srv.api("/api/run", { method: "POST", body: { action: "stop" } });
+    const older = await t.waitRun("stopped");
+    // a different project runs to the end in between
+    t.srv.control({ lead: "finish", onResume: "finish" });
+    await t.proposeAndStart(PROPOSE("newer-app"));
+    await until(() => t.run().project === "newer-app" && t.run().status === "finished", 15000, "newer run");
+    const r = await t.srv.api("/api/run", { method: "POST", body: { action: "continue", runId: older.id } });
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+    const fin = await until(() => (t.run().id === older.id && t.run().status === "finished" ? t.run() : null), 15000, "older run finished");
+    assert.equal(fin.project, "older-app");
+    const last = t.srv.fakeLog().filter((l) => l.role === "lead").at(-1);
+    assert.match(last.prompt, /board now shows a later run/);
+    assert.equal(last.cwd, fs.realpathSync(path.join(t.s.projects, "older-app")));
+    const history = t.s.read("history.json");
+    assert.deepEqual(history.map((h) => [h.project, h.status]), [["older-app", "finished"], ["newer-app", "finished"]]);
+    await t.done();
+  });
+});
+
 describe("failures are explained", opts, () => {
   test("a failed run says what happened in plain words, with next steps and details", async () => {
     const t = await setup({ lead: "fail" });

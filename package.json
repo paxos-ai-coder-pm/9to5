@@ -2,11 +2,13 @@
   "name": "vikrants-dev-studio",
   "private": true,
   "description": "An 8-agent software team for Claude Code with a pixel-art office — built so non-developers can describe, approve, open and use what the team makes.",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node tools/team-office/server.mjs",
-    "test": "node --test --test-concurrency=1 tools/team-office/test/unit.test.mjs tools/team-office/test/team-cli.test.mjs tools/team-office/test/projects.test.mjs tools/team-office/test/server.test.mjs",
-    "test:ui": "node --test --test-concurrency=1 tools/team-office/test/ui.test.mjs",
+    "test": "node --test --test-concurrency=1 --test-timeout=120000 tools/team-office/test/unit.test.mjs tools/team-office/test/team-cli.test.mjs tools/team-office/test/projects.test.mjs tools/team-office/test/server.test.mjs",
+    "test:ui": "node --test --test-concurrency=1 --test-timeout=120000 tools/team-office/test/ui.test.mjs",
     "check": "node -e \"for (const d of ['tools/team-office', 'tools/team-office/public', 'tools/team-office/test']) for (const f of require('fs').readdirSync(d)) if (/\\.m?js$/.test(f)) require('child_process').execFileSync(process.execPath, ['--check', d + '/' + f], { stdio: 'inherit' })\""
   }
 }

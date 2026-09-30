@@ -253,6 +253,9 @@ function findBrowser() {
   return candidates.find((c) => fs.existsSync(c)) || null;
 }
 export const screenshotPath = (dir) => path.join(dir, ".claude", "devstudio", "screenshot.png");
+let lastShotError = null;
+/** Why the last screenshot attempt produced no picture (null if it worked). */
+export const screenshotError = () => lastShotError;
 
 /** Take a picture of the running app (starting it if needed). Resolves to the file path, or null if not possible. */
 export async function captureScreenshot(project) {
@@ -268,14 +271,31 @@ export async function captureScreenshot(project) {
     }
     if (st?.status !== "running" || !st.url) return null;
     const out = screenshotPath(project.dir);
+    const fresh = out.replace(/\.png$/, ".new.png"); // a failed attempt must not wipe the previous picture
     fs.mkdirSync(path.dirname(out), { recursive: true });
-    const profile = fs.mkdtempSync(path.join(os.tmpdir(), "devstudio-shot-"));
-    const args = ["--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run", "--no-default-browser-check", `--user-data-dir=${profile}`, "--window-size=1280,800", "--virtual-time-budget=4000", `--screenshot=${out}`, st.url];
-    if (process.platform === "linux" && process.getuid?.() === 0) args.unshift("--no-sandbox");
-    await new Promise((resolve) => execFile(browser, args, { timeout: 60000, windowsHide: true }, () => resolve()));
+    fs.rmSync(fresh, { force: true });
+    // Chrome makes Unix sockets in its temp folder (≈108-character path limit): use a short one where there is one
+    const tmp = process.platform !== "win32" && fs.existsSync("/tmp") ? "/tmp" : os.tmpdir();
+    const profile = fs.mkdtempSync(path.join(tmp, "devstudio-shot-"));
+    const args = ["--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run", "--no-default-browser-check", `--user-data-dir=${profile}`, "--window-size=1280,800", "--virtual-time-budget=4000", `--screenshot=${fresh}`, st.url];
+    const shoot = (extra) =>
+      new Promise((resolve) =>
+        execFile(browser, [...extra, ...args], { timeout: 60000, windowsHide: true, env: { ...process.env, TMPDIR: tmp } }, (err, _o, stderr) => resolve(err ? String(stderr || err.message).slice(-600) : null)),
+      );
+    const linux = process.platform === "linux";
+    let err = await shoot(linux && process.getuid?.() === 0 ? ["--no-sandbox"] : []);
+    // Linux containers / AppArmor often have no usable sandbox; the page is the user's own app on localhost
+    if (!fs.existsSync(fresh) && linux) err = await shoot(["--no-sandbox"]);
     fs.rmSync(profile, { recursive: true, force: true });
-    return fs.existsSync(out) ? out : null;
-  } catch {
+    if (!fs.existsSync(fresh)) {
+      lastShotError = err || "the browser wrote no picture";
+      return null;
+    }
+    fs.renameSync(fresh, out);
+    lastShotError = null;
+    return out;
+  } catch (e) {
+    lastShotError = e.message;
     return null;
   } finally {
     if (!wasRunning) stopApp(project.dir);
