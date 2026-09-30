@@ -18,6 +18,12 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: npm run check
+      - name: which browser takes the screenshots
+        shell: bash
+        run: |
+          for b in google-chrome google-chrome-stable chromium chromium-browser "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"; do
+            if command -v "$b" >/dev/null 2>&1 || [ -x "$b" ]; then echo "$b: $("$b" --version 2>&1 | head -1)"; fi
+          done
       - run: npm test
 
   windows:

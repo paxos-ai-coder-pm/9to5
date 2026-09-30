@@ -241,7 +241,7 @@ export function showFiles(dir) {
 }
 
 // ---------- screenshot ----------
-function findBrowser() {
+export function findBrowser() {
   if (process.env.DEVSTUDIO_CHROME) return process.env.DEVSTUDIO_CHROME;
   const pf = [process.env.PROGRAMFILES, process.env["PROGRAMFILES(X86)"], process.env.LOCALAPPDATA].filter(Boolean);
   const candidates =
@@ -278,17 +278,21 @@ export async function captureScreenshot(project) {
     const tmp = process.platform !== "win32" && fs.existsSync("/tmp") ? "/tmp" : os.tmpdir();
     const profile = fs.mkdtempSync(path.join(tmp, "devstudio-shot-"));
     const args = ["--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run", "--no-default-browser-check", `--user-data-dir=${profile}`, "--window-size=1280,800", "--virtual-time-budget=4000", `--screenshot=${fresh}`, st.url];
+    // resolves to what went wrong (exit status + the browser's own output), or null when it exited cleanly
     const shoot = (extra) =>
       new Promise((resolve) =>
-        execFile(browser, [...extra, ...args], { timeout: 60000, windowsHide: true, env: { ...process.env, TMPDIR: tmp } }, (err, _o, stderr) => resolve(err ? String(stderr || err.message).slice(-600) : null)),
+        execFile(browser, [...extra, ...args], { timeout: 60000, windowsHide: true, env: { ...process.env, TMPDIR: tmp } }, (err, stdout, stderr) => {
+          const said = `${stdout || ""}${stderr || ""}`.split("\n").filter((l) => l.trim() && !/crashpad|cpufreq/.test(l)).slice(-12).join("\n");
+          resolve({ failed: !!err, text: `${err ? `exit ${err.code ?? err.signal ?? "?"}` : "exit 0"}${said ? `: ${said}` : ""}` });
+        }),
       );
     const linux = process.platform === "linux";
-    let err = await shoot(linux && process.getuid?.() === 0 ? ["--no-sandbox"] : []);
+    const tries = [await shoot(linux && process.getuid?.() === 0 ? ["--no-sandbox"] : [])];
     // Linux containers / AppArmor often have no usable sandbox; the page is the user's own app on localhost
-    if (!fs.existsSync(fresh) && linux) err = await shoot(["--no-sandbox"]);
+    if (!fs.existsSync(fresh) && linux) tries.push(await shoot(["--no-sandbox"]));
     fs.rmSync(profile, { recursive: true, force: true });
     if (!fs.existsSync(fresh)) {
-      lastShotError = err || "the browser wrote no picture";
+      lastShotError = `no picture from ${path.basename(browser)} (${tries.map((t) => t.text).join(" | then: ")})`;
       return null;
     }
     fs.renameSync(fresh, out);

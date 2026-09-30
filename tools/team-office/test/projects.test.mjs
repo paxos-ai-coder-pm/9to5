@@ -205,7 +205,8 @@ test("apps: show files hands the folder to the system file manager", async () =>
   await until(() => fs.existsSync(process.env.FAKE_LOG + ".opener") && fs.readFileSync(process.env.FAKE_LOG + ".opener", "utf8").includes(p.dir), 5000, "opener called");
 });
 
-const chrome = [process.env.CHROMIUM_PATH, "/opt/pw-browsers/chromium", "/usr/bin/chromium", "/usr/bin/google-chrome"].filter(Boolean).find((c) => fs.existsSync(c));
+// the browser the product would use (Chrome / Edge / Chromium), or Playwright's Chromium when that's all there is
+const chrome = [process.env.CHROMIUM_PATH, "/opt/pw-browsers/chromium"].filter(Boolean).find((c) => fs.existsSync(c)) || (await import("../apps.mjs")).findBrowser();
 test("apps: a screenshot of the result is taken with a headless browser", { skip: !chrome && "no Chrome/Chromium installed" }, async () => {
   process.env.DEVSTUDIO_CHROME = chrome;
   const p = makeProject("shot-me", { "index.html": "<body style='background:#3987e5'><h1>Hello</h1></body>", "devstudio.json": { name: "Shot", kind: "static", howTo: ["Open"] } });
