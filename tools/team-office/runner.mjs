@@ -1,10 +1,11 @@
 // Launches the /team pipeline headlessly (`claude -p "/team …"`) when the user confirms a run the manager proposed.
 // New projects get their own sibling folder next to this repo, seeded with the team's agents and /team skill.
 // If a run hits the Claude usage limit it waits and resumes the same session automatically after each reset.
+// If the lead stops because the user hasn't answered its question yet, the run resumes as soon as they answer.
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
-import { ROOT, DIR, updateState, setModel, readState, claudeEnv } from "./lib.mjs";
+import { ROOT, DIR, updateState, setModel, readState, readChat, claudeEnv, signInHint } from "./lib.mjs";
 import { createStreamParser } from "./stream.mjs";
 
 const RUN_FILE = path.join(DIR, "run.json");
@@ -49,7 +50,7 @@ const DENIED_TOOLS = [
 let child = null;
 let stopping = false;
 let resumeTimer = null;
-let onEvent = null; // (run) => void — called on waiting / resumed / finished / failed / stopped
+let onEvent = null; // (run) => void — called on waiting / needs-answer / resumed / finished / failed / stopped
 
 export function readRun() {
   try {
@@ -89,7 +90,8 @@ const emit = (run) => {
   } catch {}
 };
 
-// A run occupies the team while it's working or waiting for a usage reset.
+// A run occupies the team while it's working or waiting for a usage reset. A run paused for the user's answer
+// ("needs-answer") doesn't: starting a new run replaces it.
 export const isRunning = () => !!child || readRun()?.status === "waiting";
 
 // On server start: re-arm a pending usage-reset resume; a "running" run with no live child was interrupted.
@@ -100,11 +102,11 @@ export function recoverRunState(handler) {
   if (run?.status === "waiting") scheduleResume(run);
 }
 
-// "merage-hub" / "." → this repo; otherwise a sibling folder (created if missing).
+// "." / this repo's folder name → the Dev Studio itself; otherwise a sibling folder (created if missing).
 export function resolveProject(name) {
   const n = String(name || "").trim().toLowerCase();
   const here = path.basename(ROOT).toLowerCase();
-  if (!n || n === "." || n === "merage-hub" || n === here) return { name: path.basename(ROOT), dir: ROOT, isNew: false };
+  if (!n || n === "." || n === here) return { name: path.basename(ROOT), dir: ROOT, isNew: false };
   if (!/^[a-z0-9][a-z0-9-]{1,48}$/.test(n)) throw new Error(`"${name}" isn't a valid project folder name (use lowercase letters, digits and dashes).`);
   const dir = path.join(PROJECTS_ROOT, n);
   const isNew = !fs.existsSync(dir) || fs.readdirSync(dir).filter((f) => f !== ".git").length === 0;
@@ -174,30 +176,48 @@ function scheduleResume(run) {
   resumeTimer = setTimeout(() => (Date.now() >= run.resumeAt - 1000 ? resumeRun() : scheduleResume(readRun())), Math.min(wait, 6 * 3600 * 1000));
 }
 
-function resumeRun() {
+// reason "usage": the usage limit reset (run is "waiting"); "answer": the user replied (run is "needs-answer").
+function resumeRun(reason = "usage") {
   const run = readRun();
-  if (!run || run.status !== "waiting" || child) return;
+  if (!run || run.status !== (reason === "answer" ? "needs-answer" : "waiting") || child) return false;
   if ((run.attempts || 1) >= MAX_ATTEMPTS) {
-    const done = { ...run, status: "failed", endedAt: Date.now(), error: `Gave up after ${run.attempts} attempts across usage resets.` };
+    const done = { ...run, status: "failed", endedAt: Date.now(), error: `Gave up after ${run.attempts} attempts.` };
     writeRun(done);
-    return emit(done);
+    emit(done);
+    return false;
   }
+  const intro =
+    reason === "answer"
+      ? `The user has replied to your question — continue the team pipeline exactly where you left off. ` +
+        `First run ${run.tCmd} inbox to read their reply and ${run.tCmd} resume to see the office board (if you set the phase to done when you paused, set it back with ${run.tCmd} phase <the phase you were in>); `
+      : `Your Claude usage limit has reset — continue the team pipeline exactly where you left off. ` +
+        `First run ${run.tCmd} resume to see the office board (done / active / blocked / ready tasks) and ${run.tCmd} inbox for any new messages from the user; `;
   const prompt =
-    `Your Claude usage limit has reset — continue the team pipeline exactly where you left off. ` +
-    `First run ${run.tCmd} resume to see the office board (done / active / blocked / ready tasks) and ${run.tCmd} inbox for any new messages from the user; ` +
+    intro +
     `then carry on with the remaining steps of the /team skill (re-spawn any teammate whose work was cut off, with the plan and what's already done). ` +
     `Same HEADLESS rules as before: the user isn't watching this terminal, talk to them only via ${run.tCmd} say / inbox. ` +
     `If a command is refused by permissions, do NOT try to change settings, permissions, or config and don't hunt for workarounds — tell the user what you need with T say, then continue with everything you can do without it. ` +
     (run.allowGithub ? `GitHub publishing is still allowed for this run as the task describes (no force-push, no deletes).` : `Never git commit or push.`);
   const next = { ...run, attempts: (run.attempts || 1) + 1, resumedAt: Date.now() };
   spawnRun(next, prompt, run.sessionId);
-  emit({ ...readRun(), status: "resumed" });
+  emit({ ...readRun(), status: "resumed", reason });
+  return true;
 }
+
+/** Continue a run that paused for the user's answer (call after the answer is in the team's inbox). */
+export const continueAfterAnswer = () => resumeRun("answer");
 
 /** Start a headless /team run. `handler(run)` is called on every status change. */
 export function startRun({ project, task, allowGithub = false }, handler) {
   if (handler) onEvent = handler;
   if (isRunning()) throw new Error("A run is already in progress or waiting for a usage reset — stop it first.");
+  // a run that paused for an answer the user never gave is replaced by the new one
+  const paused = readRun();
+  if (paused?.status === "needs-answer") {
+    const done = { ...paused, status: "stopped", endedAt: Date.now() };
+    writeRun(done);
+    emit(done);
+  }
   const p = resolveProject(project);
   prepareProject(p);
 
@@ -225,10 +245,11 @@ function spawnRun(run, prompt, resumeSessionId) {
   const allowed = run.allowGithub ? [...ALLOWED_TOOLS, ...GITHUB_TOOLS] : ALLOWED_TOOLS;
   const args = ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits", "--strict-mcp-config", "--allowedTools", ...allowed, "--disallowedTools", ...DENIED_TOOLS];
   if (resumeSessionId) args.push("--resume", resumeSessionId);
-  child = spawn(CLAUDE_BIN, args, { cwd: run.dir, env: claudeEnv({ TEAM_CLI }), windowsHide: true });
+  // detached on macOS/Linux = its own process group, so ■ Stop can end the lead and everything it started (killTree)
+  child = spawn(CLAUDE_BIN, args, { cwd: run.dir, env: claudeEnv({ TEAM_CLI }), windowsHide: true, detached: process.platform !== "win32" });
   stopping = false;
 
-  const current = { ...run, status: "running", pid: child.pid, resumeAt: undefined, error: undefined, summary: undefined };
+  const current = { ...run, status: "running", pid: child.pid, resumeAt: undefined, error: undefined, summary: undefined, question: undefined };
   writeRun(current);
 
   let authError = null;
@@ -249,7 +270,7 @@ function spawnRun(run, prompt, resumeSessionId) {
     onRateLimit: (info) => (limit = info),
     onRetry: (ev) => {
       if ((ev.error_status === 401 || ev.error_status === 403) && !authError && child) {
-        authError = `Authentication failed (HTTP ${ev.error_status}) — sign in with \`claude auth login\` in PowerShell.`;
+        authError = `Authentication failed (HTTP ${ev.error_status}). ${signInHint("start the run again")}`;
         killTree(child.pid);
       }
     },
@@ -289,6 +310,18 @@ function spawnRun(run, prompt, resumeSessionId) {
     const s = readState();
     const pipelineStarted = !!s.task && s.startedAt >= run.startedAt;
     let status = stopping ? "stopped" : err || code !== 0 || result?.is_error ? "failed" : "finished";
+
+    // Ended cleanly while its question (T ask) was still open → the lead gave up waiting for the user; nothing is
+    // finished. Keep the session and continue the moment they answer (or right away if the answer already arrived).
+    const openAsk = s.ask && s.ask.t >= run.startedAt ? s.ask : null;
+    if (status === "finished" && pipelineStarted && openAsk && sessionId) {
+      const paused = { ...current, sessionId, status: "needs-answer", pausedAt: Date.now(), question: String(openAsk.text).slice(0, 500) };
+      writeRun(paused);
+      emit(paused);
+      if (openAsk.answered || readChat().inbox.some((m) => !m.read)) setTimeout(continueAfterAnswer, 1000);
+      return;
+    }
+
     if (status === "finished" && !pipelineStarted) {
       status = "failed";
       err = "The team lead ended without starting the pipeline.";
@@ -318,7 +351,7 @@ export function stopRun() {
     return true;
   }
   const run = readRun();
-  if (run?.status === "waiting") {
+  if (run?.status === "waiting" || run?.status === "needs-answer") {
     clearTimeout(resumeTimer);
     const done = { ...run, status: "stopped", endedAt: Date.now() };
     writeRun(done);
@@ -326,4 +359,10 @@ export function stopRun() {
     return true;
   }
   return false;
+}
+
+// Office shutting down (Ctrl+C / window closed): end the run's process group too, so no run keeps going unseen.
+// The next start marks it "interrupted".
+export function shutdown() {
+  if (child) killTree(child.pid);
 }

@@ -73,7 +73,7 @@ async function poll() {
       lastStamp = stamp;
       // A run that ended without reaching DONE leaves a stale board (phase stuck at e.g. PLAN, agents mid-task).
       // Show it as idle so nobody looks busy; the tasks and log stay visible for reference.
-      const ended = s.run && !["running", "waiting"].includes(s.run.status);
+      const ended = s.run && !["running", "waiting", "needs-answer"].includes(s.run.status);
       if (!empty && ended && s.phase !== "done") {
         const agents = Object.fromEntries(Object.entries(s.agents || {}).map(([id, a]) => [id, id === "manager" ? a : { ...a, state: "idle", activity: "" }]));
         return apply({ ...s, phase: "idle", agents, ask: s.ask?.answered ? null : s.ask });

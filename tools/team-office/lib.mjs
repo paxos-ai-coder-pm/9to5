@@ -145,6 +145,13 @@ export function claudeEnv(extra = {}) {
   return env;
 }
 
+// How to sign the Claude CLI in, in words for this computer's OS (sign-in can't happen from the office itself).
+export function signInHint(then = "try again") {
+  const where =
+    process.platform === "win32" ? "Open PowerShell (Start menu → PowerShell)" : process.platform === "darwin" ? "Open Terminal (Spotlight → Terminal)" : "Open a terminal";
+  return `${where}, run: claude auth login — approve in the browser, then ${then}.`;
+}
+
 // Record the model an agent actually ran on ("lead" = the orchestrating session). Returns true if it changed.
 export function setModel(state, agent, model) {
   if (!model || state.models?.[agent] === model) return false;

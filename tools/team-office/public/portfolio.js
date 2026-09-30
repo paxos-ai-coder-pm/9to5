@@ -4,6 +4,7 @@ import { esc } from "./agents.js";
 const STATUS = {
   running: { label: "In progress", cls: "active", icon: "▶" },
   waiting: { label: "Paused (usage limit)", cls: "ready", icon: "⏳" },
+  "needs-answer": { label: "Waiting for your answer", cls: "ready", icon: "⏸" },
   finished: { label: "Built", cls: "done", icon: "✓" },
   failed: { label: "Needs attention", cls: "blocked", icon: "✖" },
   stopped: { label: "Stopped", cls: "pending", icon: "■" },

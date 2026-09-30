@@ -9,8 +9,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFile, execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { ROOT, STATE_FILE, CHAT_FILE, readState, readChat, updateChat, updateState, setAgent, setModel, configuredModels, summary, claudeEnv, event } from "./lib.mjs";
-import { readRun, readHistory, startRun, stopRun, isRunning, resolveProject, recoverRunState } from "./runner.mjs";
+import { ROOT, STATE_FILE, CHAT_FILE, readState, readChat, updateChat, updateState, setAgent, setModel, configuredModels, summary, claudeEnv, event, signInHint } from "./lib.mjs";
+import { readRun, readHistory, startRun, stopRun, isRunning, resolveProject, recoverRunState, continueAfterAnswer, shutdown } from "./runner.mjs";
 import { createStreamParser } from "./stream.mjs";
 import { createTelegram } from "./telegram.mjs";
 
@@ -69,7 +69,8 @@ function runSnapshot() {
   return [
     run
       ? `Pipeline run: ${run.status.toUpperCase()} — project "${run.project}" (${run.dir}) — task: ${run.task.split("\n")[0]} — started ${t(run.startedAt)}${run.attempts > 1 ? `, attempt ${run.attempts}` : ""}${run.endedAt ? `, ended ${t(run.endedAt)}` : ""}${run.error ? ` — error: ${run.error}` : ""}` +
-        (run.status === "waiting" ? ` — paused by the Claude usage limit; resumes automatically at ${t(run.resumeAt)}, continuing where it left off (the user can ■ Stop it).` : "")
+        (run.status === "waiting" ? ` — paused by the Claude usage limit; resumes automatically at ${t(run.resumeAt)}, continuing where it left off (the user can ■ Stop it).` : "") +
+        (run.status === "needs-answer" ? ` — paused because the team's question is unanswered; it continues automatically as soon as the user answers (banner buttons, or RELAY their answer). Nothing is finished yet.` : "")
       : "No pipeline run has been started from the office yet.",
     proposal ? `Pending proposal (waiting for the user's confirmation): project "${proposal.project}"${proposal.isNew ? " (new folder)" : ""} — ${proposal.task}` : "No pending proposal.",
     (() => {
@@ -79,7 +80,7 @@ function runSnapshot() {
         ? `The user already answered the team's question ("${ask.text.slice(0, 200)}") — the team will pick it up at its next inbox check.`
         : `The team is WAITING for the user's answer (${ask.agent} asks: "${ask.text.slice(0, 400)}"). Point the user to the yellow banner / ✓ Approve and ✎ Reply buttons, or if they answer you in chat, RELAY it.`;
     })(),
-    `This repo (Merage Hub, project name "merage-hub"): ${ROOT}`,
+    `The Dev Studio itself (project name "."): ${ROOT} — only for changes to the studio/office, when the user explicitly asks for that.`,
     githubAccount ? `GitHub CLI (gh) is signed in as: ${githubAccount} — runs you mark with ALLOW: github can create repos and push there.` : "GitHub CLI (gh) is not signed in — publishing runs won't work until the user runs `gh auth login`.",
     `Sibling project folders in ${path.resolve(ROOT, "..")}: ${projects.join(", ") || "(none)"}`,
   ].join("\n");
@@ -203,13 +204,13 @@ async function handleChat(text, via) {
   setTimeout(() => (draft = ""), 1500); // keep the draft briefly so the final message replaces it without a flash
 
   if (r.error) {
-    const loginHint = /log ?in|auth|401/i.test(r.error)
-      ? " Sign-in can't be done from this chat. Open PowerShell (Start menu → PowerShell), run: claude auth login — approve in the browser, then send your message here again."
-      : "";
+    const loginHint = /log ?in|auth|401/i.test(r.error) ? ` Sign-in can't be done from this chat. ${signInHint("send your message here again")}` : "";
+    // Only queue it for the team if a run is there to read it — otherwise it would surface in some later, unrelated run.
+    const listening = teamListening();
     updateChat((c) => {
       c.busy = false;
-      c.messages.push(msg("system", `The manager couldn't reply: ${r.error}.${loginHint} Your message was saved to the team inbox, so the /team pipeline will still see it.`));
-      c.inbox.push({ id: crypto.randomUUID(), t: Date.now(), text, read: false });
+      c.messages.push(msg("system", `The manager couldn't reply: ${r.error}.${loginHint} ${listening ? "Your message was saved to the team inbox, so the team will still see it." : "Your message wasn't delivered — send it again once the manager is back."}`));
+      if (listening) c.inbox.push({ id: crypto.randomUUID(), t: Date.now(), text, read: false });
     });
     updateState((s) => setAgent(s, "manager", "failed", "Chat offline"));
     return;
@@ -240,6 +241,7 @@ async function handleChat(text, via) {
   updateState((s) => {
     setAgent(s, "manager", "waiting", proposal ? "Waiting for your go-ahead" : relays.length ? `Relayed ${relays.length} note(s) to team` : "Here if you need me");
   });
+  if (relays.length) continueAfterAnswer(); // a run paused for the user's answer picks it up now
 
   // START → only launches a run the user has already seen proposed (guards against starting unconfirmed work).
   if (start) {
@@ -253,6 +255,14 @@ function systemMessage(text) {
   updateChat((c) => c.messages.push(msg("system", text)));
 }
 
+// Is a team run there to read the inbox? An office run (working, paused for usage, or paused for an answer) or a
+// /team run started from Claude Code (its board is mid-pipeline).
+function teamListening() {
+  if (isRunning() || readRun()?.status === "needs-answer") return true;
+  const s = readState();
+  return !!s.task && !["done", "idle"].includes(s.phase);
+}
+
 const fmtTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 const fmtIn = (ms) => {
   const m = Math.max(1, Math.round((ms - Date.now()) / 60000));
@@ -264,7 +274,11 @@ function onRunEvent(run) {
   const title = run.task.split("\n")[0].slice(0, 120);
   const text = {
     waiting: `⏳ Out of Claude usage — the team paused mid-run (${run.limitMessage}). It will pick up automatically where it left off at ${fmtTime(run.resumeAt)} (in ${fmtIn(run.resumeAt)}). ■ Stop cancels.`,
-    resumed: `▶ Usage limit has reset — the team is back at work on: ${title} (attempt ${run.attempts}).`,
+    "needs-answer": `⏸ The team paused because it's waiting for your answer — nothing has been built yet. Answer with ✓ Approve / ✎ Reply (or just tell me) and it carries on right where it stopped.`,
+    resumed:
+      run.reason === "answer"
+        ? `▶ Got your answer — the team is back at work on: ${title}.`
+        : `▶ Usage limit has reset — the team is back at work on: ${title} (attempt ${run.attempts}).`,
     finished: `✅ Run finished — ${title}. Files are in ${run.dir}.`,
     stopped: `■ Run stopped — ${title}.`,
     failed: `⚠️ Run failed — ${title}.${run.error ? ` ${run.error}` : ""}`,
@@ -274,7 +288,7 @@ function onRunEvent(run) {
     (run.summary && ["finished", "failed"].includes(run.status) ? `\n\nTeam lead's last words:\n${run.summary}` : "") +
     (run.status === "failed" ? `\n\nFull log: ${run.log}` : "");
   systemMessage(text + extra);
-  const board = { waiting: `Paused until ${fmtTime(run.resumeAt)}`, resumed: "Team is back at work" }[run.status] || `Run ${run.status}`;
+  const board = { waiting: `Paused until ${fmtTime(run.resumeAt)}`, "needs-answer": "Waiting for your answer", resumed: "Team is back at work" }[run.status] || `Run ${run.status}`;
   updateState((s) => setAgent(s, "manager", "waiting", board));
 }
 
@@ -307,6 +321,7 @@ function answerTeam(text, via) {
     if (s.ask) s.ask.answered = Date.now();
     event(s, { type: "log", agent: "", msg: `💬 You answered${via ? ` (${via})` : ""}: ${text.slice(0, 120)}` });
   });
+  continueAfterAnswer(); // a run that paused waiting for this answer resumes now
   return { ok: true };
 }
 
@@ -374,10 +389,11 @@ function visibilityOf(slug) {
   }
   return ghVisibility.get(slug).visibility;
 }
+const ACTIVE = ["running", "waiting", "needs-answer"]; // run states that aren't over yet
 function portfolio() {
   const run = readRun();
   const runs = readHistory();
-  if (run && ["running", "waiting"].includes(run.status)) runs.unshift({ ...run, title: run.task.split("\n")[0] });
+  if (run && ACTIVE.includes(run.status)) runs.unshift({ ...run, title: run.task.split("\n")[0] });
   const byDir = new Map();
   for (const r of runs) {
     if (!r.dir) continue;
@@ -397,7 +413,7 @@ function portfolio() {
       runs: p.runs,
       // project status: an active run wins; otherwise a project that was ever built successfully counts as built
       // (a later failed/stopped run is shown as a note, not as the project's status)
-      status: ["running", "waiting"].includes(p.latest.status) ? p.latest.status : p.built ? "finished" : p.latest.status,
+      status: ACTIVE.includes(p.latest.status) ? p.latest.status : p.built ? "finished" : p.latest.status,
       lastRunNote: p.built && ["failed", "stopped", "interrupted"].includes(p.latest.status) ? `Last run ${p.latest.status}: ${p.latest.title}` : null,
       latestTitle: p.latest.title,
       lastActivity: p.latest.endedAt || p.latest.startedAt,
@@ -420,6 +436,7 @@ function statusText() {
   const lines = [];
   if (run?.status === "running") lines.push(`🟢 Working on: ${run.project} — ${run.task.split("\n")[0].slice(0, 160)}`);
   else if (run?.status === "waiting") lines.push(`⏳ Paused by the usage limit — resumes at ${fmtTime(run.resumeAt)} (in ${fmtIn(run.resumeAt)}).`);
+  else if (run?.status === "needs-answer") lines.push(`⏸ Paused until you answer the team's question — ${run.project}: ${run.task.split("\n")[0].slice(0, 120)}`);
   else if (run) lines.push(`Last run ${run.status}: ${run.project} — ${run.task.split("\n")[0].slice(0, 120)}`);
   else lines.push("The team is idle — tell me what to build.");
   if (run?.status === "running" && s.task) {
@@ -442,6 +459,9 @@ const telegram = createTelegram({
 function launch(proposal) {
   if (isRunning()) return systemMessage("A run is already in progress or paused until the usage limit resets — stop it (■ in the chat) before starting another.");
   try {
+    // A fresh run starts with an empty inbox: notes left from earlier runs (or from when no run was listening)
+    // aren't instructions for this one.
+    updateChat((c) => c.inbox.forEach((m) => (m.read = true)));
     startRun({ project: proposal.project, task: proposal.task, allowGithub: !!proposal.allowGithub }, onRunEvent);
     updateChat((c) => {
       c.proposal = null;
@@ -453,8 +473,17 @@ function launch(proposal) {
   }
 }
 
-http
+// Browsers only reach this server as localhost. Any other Host header means a web page reached it through DNS
+// rebinding — refuse, or that page could read the office and start runs (which execute code on this computer).
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+function localHost(host) {
+  const h = String(host || "").toLowerCase();
+  return LOCAL_HOSTS.has(h.startsWith("[") ? h.slice(0, h.indexOf("]") + 1) : h.split(":")[0]);
+}
+
+const server = http
   .createServer(async (req, res) => {
+    if (!localHost(req.headers.host)) return send(res, 403, { error: "forbidden" });
     const url = new URL(req.url, "http://localhost");
 
     if (url.pathname === "/api/state") {
@@ -498,9 +527,14 @@ http
     }
 
     // Only accept same-origin JSON posts, so other websites can't drive the manager or launch runs.
+    // (an unparsable Origin such as "null" from a sandboxed frame counts as foreign — and must not throw)
     const sameOriginJson = () => {
       const origin = req.headers.origin;
-      return !(origin && new URL(origin).host !== req.headers.host) && String(req.headers["content-type"]).startsWith("application/json");
+      let host = null;
+      try {
+        host = origin ? new URL(origin).host : req.headers.host;
+      } catch {}
+      return host === req.headers.host && String(req.headers["content-type"]).startsWith("application/json");
     };
 
     // Direct answer to a team question (T ask) — goes straight to the team's inbox, no manager round-trip.
@@ -576,3 +610,14 @@ http
     } catch {}
     console.log(`Team office running at http://localhost:${PORT}`);
   });
+server.on("error", (e) => {
+  if (e.code !== "EADDRINUSE") throw e;
+  console.error(`Port ${PORT} is already in use — the Dev Studio is probably already running: open http://localhost:${PORT}\n(or start it on another port: node tools/team-office/server.mjs <port>)`);
+  process.exit(1);
+});
+for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+  process.on(sig, () => {
+    shutdown();
+    process.exit(0);
+  });
+}

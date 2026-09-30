@@ -27,6 +27,7 @@ export function createStudio({ chat }) {
     if (mode === "demo") return "🎮 Demo run — this is what a real run looks like";
     if (s.ask && !s.ask.answered) return `❓ The ${s.ask.agent} needs your answer — see the yellow banner`;
     if (s.ask?.answered && run?.status === "running") return "✓ Answer sent — the team is picking it up";
+    if (run?.status === "needs-answer") return "⏸ The team paused until you answer its question — nothing is built yet";
     if (run?.status === "waiting") {
       const at = new Date(run.resumeAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
       return `⏳ Paused by the Claude usage limit — the team resumes automatically at ${at}`;
@@ -210,6 +211,7 @@ export function createStudio({ chat }) {
         if (run.status === "finished") notify("✅ The team finished", `${run.project}: ${String(run.task).split("\n")[0].slice(0, 120)}`);
         if (run.status === "failed") notify("⚠ A run stopped with a problem", run.error || run.project);
         if (run.status === "waiting") notify("⏳ Paused by the usage limit", "The team will resume automatically after the reset.");
+        if (run.status === "needs-answer") notify("⏸ The team is waiting for you", "Answer its question and it carries on where it stopped.");
       }
       if (runKey !== lastRunKey && run && run.status !== "running") refreshOverview();
     }

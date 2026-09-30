@@ -25,7 +25,9 @@ export function createChat() {
   let chat = { messages: [], busy: false };
   let lastCount = -1;
   let unread = 0;
-  let open = localStorage.getItem("chatOpen") !== "0";
+  // open by default on wide screens; on phones it would cover the whole page, so start as the CHAT button there
+  const savedOpen = localStorage.getItem("chatOpen");
+  let open = savedOpen ? savedOpen !== "0" : window.matchMedia("(min-width: 1101px)").matches;
   let lastError = "";
 
   // The voice feature was removed: clear its cached model (~92 MB) and settings from this browser.
@@ -85,9 +87,10 @@ export function createChat() {
     if (chat.ask && !chat.ask.answered) chips = [["✓ Approve", "answer:Approved - go ahead."], ["Explain the plan simply", "Explain the plan in simple terms — what will I get?"], ["✎ Reply to the team", "reply"]];
     else if (run?.status === "running") chips = [["What's happening now?"], ["Anything blocked?"], ["How long will it take?"]];
     else if (run?.status === "waiting") chips = [["When does it resume?"], ["What's done so far?"]];
+    else if (run?.status === "needs-answer") chips = [["What does the team need from me?"], ["Explain the question simply"]];
     else if (run?.status === "finished" && recent) chips = [["How do I try it?"], ["Publish it to GitHub"], ["What should we improve next?"]];
     else if (run?.status === "failed" && recent) chips = [["What went wrong?"], ["Try again"]];
-    else chips = [["Start a new project", "I want to build something new — ask me what I need."], ["Improve Merage Hub", "I want to improve Merage Hub — what could the team work on?"], ["What can the team do?"]];
+    else chips = [["Start a new project", "I want to build something new — ask me what I need."], ["Improve one of my projects", "I want to improve one of my existing projects — which ones can the team work on?"], ["What can the team do?"]];
     $("chatSuggest").innerHTML = chips.map(([label, action]) => `<button data-chip="${esc(action || label)}">${esc(label)}</button>`).join("");
   }
 
@@ -154,8 +157,8 @@ export function createChat() {
     const bar = $("runBar");
     const run = chat.run;
     if (!run) return void (bar.hidden = true);
-    const icon = { running: "●", waiting: "⏳", finished: "✓", failed: "✖", stopped: "■", interrupted: "!" }[run.status] || "●";
-    const active = run.status === "running" || run.status === "waiting";
+    const icon = { running: "●", waiting: "⏳", "needs-answer": "⏸", finished: "✓", failed: "✖", stopped: "■", interrupted: "!" }[run.status] || "●";
+    const active = ["running", "waiting", "needs-answer"].includes(run.status);
     const recent = active || Date.now() - (run.endedAt || 0) < 10 * 60 * 1000;
     bar.hidden = !recent;
     bar.className = "run-bar " + run.status;
@@ -166,14 +169,22 @@ export function createChat() {
       const at = new Date(run.resumeAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
       label = `⏳ PAUSED`;
       detail = `Out of usage — resumes at ${at} (${mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins} min`})`;
+    } else if (run.status === "needs-answer") {
+      label = "⏸ WAITING FOR YOU";
+      detail = "The team needs your answer to continue — nothing is built yet";
     } else if (run.attempts > 1 && run.status === "running") detail += ` · attempt ${run.attempts}`;
+    const stopTitle = { waiting: "Cancel the automatic resume", "needs-answer": "Cancel this run instead of answering" }[run.status] || "Stop the team";
     bar.innerHTML = `<span class="r-status">${esc(label)}</span><span class="r-task" title="${esc(run.task)}">${esc(detail)}</span>${
-      active ? `<button class="px-btn small ghost" data-run="stop" title="${run.status === "waiting" ? "Cancel the automatic resume" : "Stop the team"}">■ STOP</button>` : ""
+      active ? `<button class="px-btn small ghost" data-run="stop" title="${stopTitle}">■ STOP</button>` : ""
     }`;
   }
 
   async function runAction(action, proposalId) {
-    if (action === "stop" && !confirm(chat.run?.status === "waiting" ? "Cancel the paused run? It won't resume after the usage reset." : "Stop the team's current run?")) return;
+    const confirmText = {
+      waiting: "Cancel the paused run? It won't resume after the usage reset.",
+      "needs-answer": "Cancel this run? The team won't continue even if you answer later.",
+    }[chat.run?.status] || "Stop the team's current run?";
+    if (action === "stop" && !confirm(confirmText)) return;
     try {
       const res = await fetch("/api/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, proposalId }) });
       if (!res.ok) lastError = (await res.json().catch(() => ({}))).error || `Request failed (${res.status})`;
