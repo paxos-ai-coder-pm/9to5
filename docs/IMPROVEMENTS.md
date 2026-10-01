@@ -30,7 +30,7 @@ Their journey has seven steps. Today the studio is strong in the middle (describ
 | P1 Readability & accessibility (bundled fonts, sizes, contrast, motion, light theme, dialogs, tabs, live region) | ✅ done, tested (contrast computed, keyboard paths in browser tests) |
 | P2 ✎ Change something, 🌐 Put it online (GitHub Pages via a publishing run), ⬇ Share a copy, history + undo, Remove from list | ✅ done · ◐ "Put it online" not tested against real GitHub; server apps can't use Pages |
 | P2 Phone QR code | ✅ done · ◐ PIN-protected phone web view not done |
-| P2 Tests + CI, top-level error handler, configurable name | ✅ 96 tests (unit, CLI, projects/apps, integration with a fake `claude`, browser) + GitHub Actions on Linux/macOS/Windows |
+| P2 Tests + CI, top-level error handler, configurable name | ✅ 105 tests (unit, CLI, launcher, projects/apps, integration with a fake `claude`, browser) + GitHub Actions on Linux/macOS/Windows |
 
 Still open: a real end-to-end run with Claude to tune the new agent instructions; starting an npm-installed `claude.cmd` on Windows (the office currently needs the Windows installer's `claude.exe`); a desktop wrapper / `npx devstudio`; hosting for apps that need a server; a sandboxed mode for untrusted work.
 

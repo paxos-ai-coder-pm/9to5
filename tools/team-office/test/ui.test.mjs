@@ -130,7 +130,7 @@ describe("office UI", { skip }, () => {
     await page.waitForSelector(".pf-card button:has-text('▶ OPEN')");
     await t.shot("05-ready");
     const [app] = await Promise.all([ctx.waitForEvent("page"), page.click(".pf-card button:has-text('▶ OPEN')")]);
-    await app.waitForURL(/localhost:45\d\d/, { timeout: 15000 });
+    await app.waitForURL(/^http:\/\/localhost:4[5-9]\d\d\/$/, { timeout: 15000 }); // the app's own port, not the office's launch page
     assert.match(await app.locator("h1").innerText(), /Hello from the team v1/);
     assert.deepEqual(t.errors, []);
   });

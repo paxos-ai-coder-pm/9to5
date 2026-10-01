@@ -95,20 +95,20 @@ function lead(mode, session) {
 
 function finish(done) {
   // finish: plan → build a static page → deliver → report → done
-  fs.writeFileSync("graph.fake.json", JSON.stringify({ version: 1, tasks: [
+  fs.mkdirSync(".devstudio", { recursive: true }); // the team's working folder, like the real lead (SKILL.md)
+  fs.writeFileSync(path.join(".devstudio", "graph.json"), JSON.stringify({ version: 1, tasks: [
     { id: "T1", title: "Create index.html", plain: "Make the page", owner: "dev-1", depends_on: [] },
     { id: "T2", title: "Final code review", plain: "Final check", owner: "reviewer", depends_on: ["T1"] },
   ] }));
-  T("tasks", "graph.fake.json");
-  fs.rmSync("graph.fake.json");
+  T("tasks", path.join(".devstudio", "graph.json"));
   T("phase", "build");
   const n = fs.existsSync("index.html") ? Number((fs.readFileSync("index.html", "utf8").match(/v(\d+)/) || [0, 0])[1]) + 1 : 1;
   fs.writeFileSync("index.html", `<!doctype html><title>Fake app</title><h1>Hello from the team v${n}</h1>`);
   T("task", "T1", "done");
   fs.writeFileSync("devstudio.json", JSON.stringify({ name: "Fake App", kind: "static", howTo: ["Click ▶ Open", "Your page opens in the browser"] }));
   T("deliver");
-  fs.writeFileSync(path.join(".claude", "report.fake.json"), JSON.stringify({ summary: "Your page is ready.", got: ["A page that says hello"], howToOpen: ["Click ▶ Open"], notYet: ["No styling yet"], next: ["Add colors"] }));
-  T("report", path.join(".claude", "report.fake.json"));
+  fs.writeFileSync(path.join(".devstudio", "report.json"), JSON.stringify({ summary: "Your page is ready.", got: ["A page that says hello"], howToOpen: ["Click ▶ Open"], notYet: ["No styling yet"], next: ["Add colors"] }));
+  T("report", path.join(".devstudio", "report.json"));
   T("task", "T2", "done");
   T("phase", "done");
   done("All done — built the page.");

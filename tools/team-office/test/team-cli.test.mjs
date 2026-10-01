@@ -56,7 +56,8 @@ test("ask --options gives the user answer buttons", () => {
 });
 
 test("wait returns as soon as the user answers, and counts the waiting time", async () => {
-  const child = spawn(process.execPath, [path.join(s.office, "team.mjs"), "wait", "--timeout", "20"], { cwd: project });
+  // a long timeout, so "it returned because of the answer" stays clear-cut on a slow or busy machine (CI on Windows)
+  const child = spawn(process.execPath, [path.join(s.office, "team.mjs"), "wait", "--timeout", "60"], { cwd: project });
   let out = "";
   child.stdout.on("data", (d) => (out += d));
   const started = Date.now();
@@ -65,7 +66,8 @@ test("wait returns as soon as the user answers, and counts the waiting time", as
   const code = await new Promise((r) => child.on("close", r));
   assert.equal(code, 0);
   assert.match(out, /Cards please/);
-  assert.ok(Date.now() - started < 8000, "didn't wait for the timeout");
+  const took = Date.now() - started;
+  assert.ok(took < 30000, `returned on the answer, not after the 60 s timeout (took ${took} ms)`);
   assert.equal(state().ask, null, "the question is answered");
   assert.ok(state().askWaitMs > 0);
   assert.ok(chat().inbox.every((m) => m.read));

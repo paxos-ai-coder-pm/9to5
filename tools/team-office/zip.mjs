@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
 
-const SKIP_DIRS = new Set(["node_modules", ".git", ".claude", ".venv", "venv", "__pycache__", ".next", ".nuxt", "target", ".gradle", ".dart_tool", "Pods", ".idea", ".vscode"]);
+const SKIP_DIRS = new Set(["node_modules", ".git", ".claude", ".devstudio", ".venv", "venv", "__pycache__", ".next", ".nuxt", "target", ".gradle", ".dart_tool", "Pods", ".idea", ".vscode"]);
 const SKIP_FILE = (name) => name === ".DS_Store" || name === "Thumbs.db" || (/^\.env(\..*)?$/.test(name) && !/\.(example|sample|template)$/.test(name));
 
 const CRC_TABLE = new Uint32Array(256).map((_, n) => {
