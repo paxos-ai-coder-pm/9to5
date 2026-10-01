@@ -7,16 +7,18 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { DIR, readChat } from "./lib.mjs";
+import { DIR, readChat, readState } from "./lib.mjs";
 
 const CONFIG = path.join(DIR, "telegram.json");
 const PAIR_TTL_MS = 15 * 60 * 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// same friendly names as the office (public/agents.js)
 const LABEL = {
-  manager: "💼 Manager", architect: "📐 Architect", "dev-1": "🛠 dev-1", "dev-2": "🛠 dev-2",
-  "tester-api": "🧪 tester-api", "tester-ui": "🧪 tester-ui", "tester-edge": "🧪 tester-edge", reviewer: "🔍 Reviewer", system: "ℹ️ Office",
+  manager: "💼 Maya · manager", architect: "📐 Asha · planner", "dev-1": "🛠 Ben · builder", "dev-2": "🛠 Chloe · builder",
+  "tester-api": "🧪 Diego · checker", "tester-ui": "🧪 Emma · checker", "tester-edge": "🛡 Farid · safety check", reviewer: "🔍 Grace · final check", system: "ℹ️ Office",
 };
+const ACTION_BUTTON = { continue: "↻ Continue", retry: "↻ Try again" }; // the chat's next-step buttons that make sense on a phone
 
 // chat markdown → Telegram HTML (escape first)
 function toHtml(text) {
@@ -42,7 +44,7 @@ function chunks(text, max = 3800) {
   return out;
 }
 
-export function createTelegram({ onText, onAnswer, onRunAction, statusText, log = console.log }) {
+export function createTelegram({ onText, onAnswer, onRunAction, statusText, studioName = () => "Dev Studio", log = console.log }) {
   let cfg = load();
   let polling = false;
   let generation = 0; // bumps on disconnect/setup so an old poll loop stops
@@ -168,9 +170,9 @@ export function createTelegram({ onText, onAnswer, onRunAction, statusText, log 
 
   function help() {
     return sendText(
-      "👋 This is your Dev Studio manager.\n\nJust type what you want built or ask how things are going.\n\n" +
+      `👋 This is your ${studioName()} manager.\n\nJust type what you want built or ask how things are going.\n\n` +
         "/status — what the team is doing\n/stop — stop the current run\n/help — this message\n\n" +
-        "When the team needs your answer you'll get ✓ Approve / ✎ Reply buttons.",
+        "When the team needs your answer you'll get answer buttons (or ✎ Reply to type your own).",
     );
   }
 
@@ -196,7 +198,7 @@ export function createTelegram({ onText, onAnswer, onRunAction, statusText, log 
         cfg.pairCode = null;
         cfg.lastSentId = readChat().messages.at(-1)?.id || null; // start fresh — don't dump history
         save();
-        await sendText(`✅ Paired with your Dev Studio, ${cfg.chatName}!`);
+        await sendText(`✅ Paired with ${studioName()}, ${cfg.chatName}!`);
         return help();
       }
       return call("sendMessage", { chat_id: m.chat.id, text: "🔒 This bot is private. Pair it from the Dev Studio office (📱 Phone button)." });
@@ -213,15 +215,15 @@ export function createTelegram({ onText, onAnswer, onRunAction, statusText, log 
       const r = onAnswer(text, "telegram");
       return sendText(r.error ? `⚠ ${r.error}` : "✓ Sent to the team — they'll pick it up within a minute.");
     }
-    const r = onText(text, "telegram");
+    const r = await onText(text, "telegram");
     if (r.error) return sendText(`⏳ ${r.error}`);
-    typingWhileBusy();
+    if (!r.blocked) typingWhileBusy();
   }
 
   async function handleButton(q) {
     const answerCb = (text) => call("answerCallbackQuery", { callback_query_id: q.id, text }).catch(() => {});
     if (!cfg.chatId || q.from.id !== cfg.chatId) return answerCb("This bot is private.");
-    const [action, arg] = String(q.data || "").split(":");
+    const [action, arg, arg2] = String(q.data || "").split(":");
     const clearButtons = () => call("editMessageReplyMarkup", { chat_id: cfg.chatId, message_id: q.message.message_id, reply_markup: { inline_keyboard: [] } }).catch(() => {});
     if (action === "approve") {
       const r = onAnswer("Approved - go ahead.", "telegram");
@@ -231,12 +233,30 @@ export function createTelegram({ onText, onAnswer, onRunAction, statusText, log 
       replyMode = true;
       await answerCb("Type your reply");
       await sendText("✎ Type your reply — it goes straight to the team.");
+    } else if (action === "opt") {
+      // one of the answer buttons of the team's question
+      const option = readState().ask?.options?.[Number(arg)];
+      const r = option ? onAnswer(option, "telegram") : { error: "That question was already answered." };
+      await answerCb(r.error ? r.error : `Sent: ${option}`);
+      clearButtons();
+    } else if (action === "ch") {
+      // one of the manager's suggested answers → as if the user typed it
+      const choice = cfg.lastChoices?.id === arg ? cfg.lastChoices.choices[Number(arg2)] : null;
+      if (!choice) return answerCb("That question has moved on — just type your answer.");
+      const r = await onText(choice, "telegram");
+      await answerCb(r.error ? r.error : choice);
+      clearButtons();
+      if (!r.error && !r.blocked) typingWhileBusy();
+    } else if (action === "run") {
+      const r = onRunAction(arg, { runId: arg2 }, "telegram");
+      await answerCb(r.error ? r.error : arg === "continue" ? "Continuing…" : "OK");
+      clearButtons();
     } else if (action === "start" || action === "dismiss") {
-      const r = onRunAction(action, arg, "telegram");
+      const r = onRunAction(action, { proposalId: arg }, "telegram");
       await answerCb(r.error ? r.error : action === "start" ? "Starting the team…" : "OK, not yet");
       clearButtons();
     } else if (action === "stop") {
-      const r = onRunAction("stop", null, "telegram");
+      const r = onRunAction("stop", {}, "telegram");
       await answerCb(r.ok ? "Stopping…" : "Nothing is running");
       clearButtons();
     } else {
@@ -258,13 +278,27 @@ export function createTelegram({ onText, onAnswer, onRunAction, statusText, log 
         if (m.from !== "user") {
           let text = `**${LABEL[m.from] || m.from}**\n${m.text}`;
           let keyboard;
+          if (m.report) {
+            const r = m.report;
+            const list = (title, items) => (items?.length ? `\n\n**${title}**\n${items.map((i) => `• ${i}`).join("\n")}` : "");
+            text += list("What you got", r.got) + list("How to open it", r.howToOpen) + list("Not in this version yet", r.notYet) + list("Ideas for next time", r.next);
+          }
+          if (m.choices?.length) {
+            cfg.lastChoices = { id: m.id.slice(0, 8), choices: m.choices };
+            keyboard = m.choices.map((c, i) => [{ text: c, callback_data: `ch:${m.id.slice(0, 8)}:${i}` }]);
+          }
+          const runButtons = (m.actions || []).filter((a) => ACTION_BUTTON[a.kind] && a.runId).map((a) => ({ text: ACTION_BUTTON[a.kind], callback_data: `run:${a.kind}:${a.runId}`.slice(0, 64) }));
+          if (runButtons.length) keyboard = [runButtons];
           if (m.proposal) {
             const p = m.proposal;
             text += `\n\n🚀 **Proposed run** — ${p.project}${p.isNew ? " (new folder)" : ""}\n${p.task.slice(0, 700)}${p.task.length > 700 ? "…" : ""}`;
             if (p.allowGithub) text += `\n\n🔓 This run may commit and push to GitHub${p.githubAccount ? ` as ${p.githubAccount}` : ""}.`;
             if (chat.proposal?.id === p.id) keyboard = [[{ text: "▶ Start", callback_data: `start:${p.id}` }, { text: "Not yet", callback_data: `dismiss:${p.id}` }]];
           }
-          if (m.ask) keyboard = [[{ text: "✓ Approve", callback_data: "approve" }, { text: "✎ Reply", callback_data: "reply" }]];
+          if (m.ask)
+            keyboard = m.options?.length
+              ? [...m.options.map((o, i) => [{ text: o, callback_data: `opt:${i}` }]), [{ text: "✎ Reply", callback_data: "reply" }]]
+              : [[{ text: "✓ Approve", callback_data: "approve" }, { text: "✎ Reply", callback_data: "reply" }]];
           await sendText(text, keyboard);
         }
         cfg.lastSentId = m.id;

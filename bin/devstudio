@@ -1,3 +1,79 @@
 #!/usr/bin/env bash
-# Git Bash wrapper for devstudio.cmd (same arguments: [stop|status])
-exec cmd //c "$(cygpath -w "$(dirname "$0")/devstudio.cmd")" "$@"
+# Dev Studio launcher for macOS and Linux (on Windows, Git Bash hands over to devstudio.cmd).
+#   devstudio          start the office (if it isn't running) and open it in the browser
+#   devstudio stop     stop the office (and any run it is doing)
+#   devstudio status   show whether it's running
+# Environment: DEVSTUDIO_PORT (default 4400), DEVSTUDIO_NO_BROWSER=1 (don't open a browser).
+set -euo pipefail
+
+case "$(uname -s)" in
+  MINGW* | MSYS* | CYGWIN*) exec cmd //c "$(cygpath -w "$(dirname "$0")/devstudio.cmd")" "$@" ;;
+esac
+
+# find the studio folder, also when this script is symlinked into ~/.local/bin
+src="$0"
+while [ -h "$src" ]; do
+  dir="$(cd -P "$(dirname "$src")" && pwd)"
+  src="$(readlink "$src")"
+  case "$src" in /*) ;; *) src="$dir/$src" ;; esac
+done
+STUDIO="$(cd -P "$(dirname "$src")/.." && pwd)"
+PORT="${DEVSTUDIO_PORT:-4400}"
+URL="http://localhost:$PORT"
+STATE="$STUDIO/.claude/team"
+LOG="$STATE/office.log"
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "Node.js is needed but wasn't found. Install it from https://nodejs.org (version 20 or newer), then run devstudio again."
+  exit 1
+fi
+
+# is a Dev Studio answering on the port?
+running() {
+  node -e 'fetch(process.argv[1] + "/api/ping", { signal: AbortSignal.timeout(2000) }).then((r) => r.json()).then((j) => process.exit(j.app === "devstudio" ? 0 : 1)).catch(() => process.exit(1))' "$URL"
+}
+office_pid() {
+  node -e 'try { process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).pid)) } catch {}' "$STATE/office.json"
+}
+open_browser() {
+  [ -n "${DEVSTUDIO_NO_BROWSER:-}" ] && return 0
+  if [ "$(uname -s)" = "Darwin" ]; then open "$URL"
+  elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$URL" >/dev/null 2>&1 &
+  else echo "Open $URL in your browser."
+  fi
+}
+
+case "${1:-start}" in
+  status)
+    if running; then echo "Dev Studio is running at $URL (pid $(office_pid))."; else echo "Dev Studio is not running."; fi
+    ;;
+  stop)
+    pid="$(office_pid)"
+    if running && [ -n "$pid" ]; then
+      kill "$pid" && echo "Dev Studio stopped."
+      for _ in 1 2 3 4 5 6 7 8 9 10; do running || break; sleep 0.5; done
+    else
+      echo "Dev Studio is not running."
+    fi
+    ;;
+  start)
+    if running; then
+      echo "Dev Studio is already running."
+    else
+      mkdir -p "$STATE"
+      echo "Starting Dev Studio at $URL …"
+      nohup node "$STUDIO/tools/team-office/server.mjs" "$PORT" >>"$LOG" 2>&1 &
+      for _ in $(seq 1 40); do running && break; sleep 0.25; done
+      if ! running; then
+        echo "Dev Studio didn't start. The last lines of its log ($LOG):"
+        tail -n 15 "$LOG" || true
+        exit 1
+      fi
+    fi
+    open_browser
+    ;;
+  *)
+    echo "Usage: devstudio [start|stop|status]"
+    exit 2
+    ;;
+esac

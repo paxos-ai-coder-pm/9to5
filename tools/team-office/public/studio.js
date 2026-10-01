@@ -1,6 +1,7 @@
 // Friendly layer on top of the office: plain-English status, "needs your answer" banner, welcome card,
 // projects/lessons tabs, help tips, and optional desktop notifications.
-import { AGENT_BY_ID, esc, fmtDur } from "./agents.js";
+import { AGENT_BY_ID, STEPS, stepIndex, displayName, esc, fmtDur } from "./agents.js";
+import { isSimple } from "./ui.js";
 
 const PHASE_TEXT = {
   plan: "Planning — the architect is working out the tasks",
@@ -10,8 +11,9 @@ const PHASE_TEXT = {
   review: "Final review — the reviewer is checking everything",
   done: "Done",
 };
+const who = (id) => (isSimple() ? AGENT_BY_ID[id]?.name || id : `The ${id}`);
 
-export function createStudio({ chat }) {
+export function createStudio({ chat, setup }) {
   const $ = (id) => document.getElementById(id);
   let state = {};
   let mode = "live";
@@ -20,16 +22,18 @@ export function createStudio({ chat }) {
   let lastAskT = 0;
   let lastRunKey = "";
   let renderedAskKey = "";
+  let studioName = "Vikrant's Dev Studio";
 
   // ---------- plain-English status ----------
   function headline(s) {
     const run = s.run;
     if (mode === "demo") return "🎮 Demo run — this is what a real run looks like";
-    if (s.ask && !s.ask.answered) return `❓ The ${s.ask.agent} needs your answer — see the yellow banner`;
+    if (s.ask && !s.ask.answered) return `❓ ${who(s.ask.agent)} needs your answer — see the yellow box below`;
     if (s.ask?.answered && run?.status === "running") return "✓ Answer sent — the team is picking it up";
+    if (run?.status === "needs-answer") return "⏸ The team paused until you answer its question — nothing is built yet";
     if (run?.status === "waiting") {
       const at = new Date(run.resumeAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-      return `⏳ Paused by the Claude usage limit — the team resumes automatically at ${at}`;
+      return `⏳ Paused by the Claude usage limit — the team continues by itself at ${at}`;
     }
     // an office-launched run knows whether it's really running; without one (a /team run in Claude Code) trust the board
     const boardActive = !!s.task && s.phase && s.phase !== "done" && s.phase !== "idle";
@@ -37,14 +41,21 @@ export function createStudio({ chat }) {
       if (!s.task) return "🚀 Starting up — the team lead is getting ready";
       const tasks = s.tasks || [];
       const done = tasks.filter((t) => t.status === "done").length;
+      if (isSimple()) {
+        const step = STEPS[stepIndex(s.phase)];
+        const n = stepIndex(s.phase) + 1;
+        return `Step ${n} of ${STEPS.length}: ${s.phase === "fix" ? "Fixing a few things" : step?.label || "Working"}${tasks.length ? ` — ${done} of ${tasks.length} parts done` : ""}`;
+      }
       const working = Object.entries(s.agents || {})
         .filter(([id, a]) => a.state === "working" && id !== "manager")
         .map(([id, a]) => `${id}${a.activity ? `: ${a.activity}` : ""}`);
       const base = s.phase === "build" ? `Building — ${done} of ${tasks.length} tasks done` : PHASE_TEXT[s.phase] || "Working";
       return working.length ? `${base} · ${working.slice(0, 2).join(" · ")}` : base;
     }
-    if (run?.status === "finished" && Date.now() - (run.endedAt || 0) < 6 * 3600e3) return `✅ Finished: ${run.project} — ask the manager how to try it`;
-    if (run?.status === "failed" && Date.now() - (run.endedAt || 0) < 6 * 3600e3) return `⚠ The last run stopped with a problem — ask the manager what happened`;
+    if (run?.status === "needs-answer") return "⏸ The team paused until you answer its question";
+    if (run?.status === "finished" && Date.now() - (run.endedAt || 0) < 6 * 3600e3) return `✅ Finished: ${run.project} — press ▶ Open to try it`;
+    if (["failed", "interrupted"].includes(run?.status) && Date.now() - (run.endedAt || 0) < 6 * 3600e3) return `⚠ The last run didn't finish — you can continue it or ask the manager what happened`;
+    if (setup?.ready() === false) return "⚙ Almost ready — finish the setup below, then tell the manager what to build";
     return "Ready — tell the manager what to build";
   }
 
@@ -53,22 +64,23 @@ export function createStudio({ chat }) {
     const ask = s.ask;
     const show = mode === "live" && ask && (!ask.answered || s.run?.status === "running") && Date.now() - ask.t < 24 * 3600e3;
     $("askBanner").hidden = !show;
-    document.title = (ask && !ask.answered && mode === "live" ? "(❓) " : "") + "Vikrant's Dev Studio — Agent Office";
+    document.title = (ask && !ask.answered && mode === "live" ? "(❓) " : "") + studioName;
     if (!show) return;
-    const key = `${ask.t}|${ask.answered || ""}`;
+    const key = `${ask.t}|${ask.answered || ""}|${isSimple()}`;
     if (key === renderedAskKey) return; // don't rebuild buttons every tick (would eat clicks)
     renderedAskKey = key;
     const a = AGENT_BY_ID[ask.agent];
-    $("askFrom").innerHTML = `<i style="background:${a?.color || "#888"}"></i>${esc(ask.agent.toUpperCase())} ASKS`;
+    $("askFrom").innerHTML = `<i style="background:${a?.color || "#888"}"></i>${esc(displayName(ask.agent, isSimple()).toUpperCase())}${isSimple() && a ? ` (${esc(a.job.toLowerCase())})` : ""} ASKS`;
     $("askText").textContent = ask.text;
     $("askBanner").classList.toggle("answered", !!ask.answered);
+    const options = ask.options?.length ? ask.options : null;
     $("askActions").innerHTML = ask.answered
       ? `<span class="ask-sent">✓ Answer sent — waiting for the team</span>`
-      : `<button class="px-btn" id="askApprove">✓ APPROVE</button><button class="px-btn ghost" id="askReply">✎ REPLY</button>`;
-    if (!ask.answered) {
-      $("askApprove").onclick = () => answer("Approved - go ahead.");
-      $("askReply").onclick = () => chat.replyTo(ask);
-    }
+      : (options
+          ? options.map((o, i) => `<button type="button" class="px-btn" data-option="${i}">${esc(o)}</button>`).join("")
+          : `<button type="button" class="px-btn" data-option="approve">✓ APPROVE</button>`) + `<button type="button" class="px-btn ghost" data-option="reply">✎ REPLY</button>`;
+    for (const b of $("askActions").querySelectorAll("[data-option]"))
+      b.onclick = () => (b.dataset.option === "reply" ? chat.replyTo(ask) : answer(b.dataset.option === "approve" ? "Approved - go ahead." : options[Number(b.dataset.option)]));
   }
 
   async function answer(text) {
@@ -98,12 +110,24 @@ export function createStudio({ chat }) {
   function selectTab(id) {
     for (const [t, panel] of Object.entries(tabs)) {
       $(t).setAttribute("aria-selected", String(t === id));
+      $(t).tabIndex = t === id ? 0 : -1;
       $(panel).hidden = t !== id;
     }
     localStorage.setItem("tab", id);
     if (id !== "tabLog") refreshOverview();
   }
-  for (const t of Object.keys(tabs)) $(t).onclick = () => selectTab(t);
+  for (const t of Object.keys(tabs)) {
+    $(t).onclick = () => selectTab(t);
+    // arrow keys move between tabs (the ARIA tabs pattern); only the selected tab is in the Tab order
+    $(t).onkeydown = (e) => {
+      const ids = Object.keys(tabs);
+      const i = ids.indexOf(t) + (e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0);
+      if (i === ids.indexOf(t)) return;
+      const next = ids[(i + ids.length) % ids.length];
+      selectTab(next);
+      $(next).focus();
+    };
+  }
   selectTab(localStorage.getItem("tab") in tabs ? localStorage.getItem("tab") : "tabLog");
 
   // ---------- projects & lessons ----------
@@ -205,11 +229,12 @@ export function createStudio({ chat }) {
     const run = s.run;
     const runKey = run ? `${run.id}:${run.status}:${run.attempts || 1}` : "";
     if (primed) {
-      if (s.ask && !s.ask.answered && s.ask.t > lastAskT) notify(`❓ The ${s.ask.agent} needs your answer`, s.ask.text.slice(0, 180));
+      if (s.ask && !s.ask.answered && s.ask.t > lastAskT) notify(`❓ ${AGENT_BY_ID[s.ask.agent]?.name || s.ask.agent} needs your answer`, s.ask.text.slice(0, 180));
       if (runKey && runKey !== lastRunKey && run) {
         if (run.status === "finished") notify("✅ The team finished", `${run.project}: ${String(run.task).split("\n")[0].slice(0, 120)}`);
         if (run.status === "failed") notify("⚠ A run stopped with a problem", run.error || run.project);
         if (run.status === "waiting") notify("⏳ Paused by the usage limit", "The team will resume automatically after the reset.");
+        if (run.status === "needs-answer") notify("⏸ The team is waiting for you", "Answer its question and it carries on where it stopped.");
       }
       if (runKey !== lastRunKey && run && run.status !== "running") refreshOverview();
     }
@@ -225,6 +250,11 @@ export function createStudio({ chat }) {
     update(s, m = "live") {
       state = s;
       mode = m;
+      if (s.studioName && s.studioName !== studioName) {
+        studioName = s.studioName;
+        $("studioName").textContent = studioName.toUpperCase();
+        $("welcomeTitle").textContent = `WELCOME TO ${studioName.toUpperCase()}`;
+      }
       $("headline").textContent = headline(s);
       renderAsk(s);
       renderWelcome(s);

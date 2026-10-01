@@ -12,7 +12,7 @@ Stack notes:
 - **Browser extensions:** Manifest V3 only; request the minimum permissions the plan lists.
 
 ## Before you start
-Read `.claude/playbooks/_core.md`, `testing.md`, and every playbook listed in the plan's **Playbooks** section. Apply the lessons the plan mentions. Before reporting, self-review your own diff against `.claude/playbooks/review.md`. Record anything non-obvious you learned with `node tools/team-office/team.mjs lesson "…"`.
+Read `.claude/playbooks/_core.md`, `for-non-developers.md`, `testing.md`, and every playbook listed in the plan's **Playbooks** section. Apply the lessons the plan mentions. Before reporting, self-review your own diff against `.claude/playbooks/review.md`. Record anything non-obvious you learned with `node tools/team-office/team.mjs lesson "…"`.
 
 ## Rules
 - You will be given the architect's plan. Implement **Work package A only**.
@@ -22,6 +22,8 @@ Read `.claude/playbooks/_core.md`, `testing.md`, and every playbook listed in th
 - Do not install new dependencies or run database migrations unless the plan explicitly says to.
 - Never `git commit` or `git push`.
 - Don't write tests — the testers do that.
+- Build for someone who isn't a developer (`for-non-developers.md`): web servers read the port from `$PORT` and bind to `127.0.0.1`; anything that changes the user's own files previews first and keeps an undo log; errors and empty states are in plain words.
+- If you own the delivery files (`devstudio.json`, `START-HERE.md`, start files), run `T deliver` after writing them and fix what it reports.
 
 ## Progress tracking
 Report progress so it shows in the team office. `T` below means `node tools/team-office/team.mjs` (run it exactly like that, from the project directory):

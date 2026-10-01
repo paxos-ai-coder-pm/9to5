@@ -1,12 +1,15 @@
 // Shared state helpers for the team office CLI (team.mjs) and server (server.mjs).
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const DIR = path.join(ROOT, ".claude", "team");
 export const STATE_FILE = path.join(DIR, "state.json");
 export const CHAT_FILE = path.join(DIR, "chat.json");
+export const RUN_FILE = path.join(DIR, "run.json");
+export const HISTORY_FILE = path.join(DIR, "history.json");
 const LOCK = path.join(DIR, ".lock");
 
 export const AGENTS = ["architect", "dev-1", "dev-2", "tester-api", "tester-ui", "tester-edge", "reviewer", "manager"];
@@ -36,17 +39,57 @@ function sleep(ms) {
 }
 
 // Several processes (both devs, the server) write concurrently, so serialize read-modify-write with a lock directory.
+// The lock records its owner's pid, so one left by a process that was killed (office closed, run stopped) is broken
+// right away instead of blocking everyone until it's 10 s old.
+const lockOwner = (dir) => {
+  try {
+    return fs.readFileSync(path.join(dir, "owner"), "utf8");
+  } catch {
+    return null;
+  }
+};
+const gone = (pid) => {
+  try {
+    process.kill(Number(pid), 0);
+    return false;
+  } catch (e) {
+    return e.code === "ESRCH";
+  }
+};
+function breakStaleLock() {
+  const owner = lockOwner(LOCK);
+  let stale = !!owner && gone(owner);
+  try {
+    stale ||= Date.now() - fs.statSync(LOCK).mtimeMs > 10000;
+  } catch {
+    return; // released meanwhile
+  }
+  if (!stale) return;
+  // move it aside first: if another process broke it and took a fresh lock meanwhile, that one is put back
+  const aside = `${LOCK}.stale-${process.pid}-${Date.now()}`;
+  try {
+    fs.renameSync(LOCK, aside);
+  } catch {
+    return;
+  }
+  if (lockOwner(aside) !== owner)
+    try {
+      return fs.renameSync(aside, LOCK);
+    } catch {}
+  fs.rmSync(aside, { recursive: true, force: true });
+}
 export function withLock(fn) {
   fs.mkdirSync(DIR, { recursive: true });
   const deadline = Date.now() + 5000;
   for (;;) {
     try {
       fs.mkdirSync(LOCK);
+      try {
+        fs.writeFileSync(path.join(LOCK, "owner"), String(process.pid));
+      } catch {}
       break;
     } catch {
-      try {
-        if (Date.now() - fs.statSync(LOCK).mtimeMs > 10000) fs.rmSync(LOCK, { recursive: true, force: true });
-      } catch {}
+      breakStaleLock();
       if (Date.now() > deadline) throw new Error("Could not acquire lock on " + LOCK);
       sleep(50);
     }
@@ -105,6 +148,32 @@ export const writeChat = (c) => {
   writeJson(CHAT_FILE, c);
 };
 
+// The current / last office-launched run, and finished runs (newest first).
+export const readRun = () => readJson(RUN_FILE, () => null);
+export function writeRun(run) {
+  fs.mkdirSync(DIR, { recursive: true });
+  fs.writeFileSync(RUN_FILE, JSON.stringify(run, null, 2));
+}
+export const readHistory = () => readJson(HISTORY_FILE, () => []);
+export function writeHistory(list) {
+  fs.mkdirSync(DIR, { recursive: true });
+  fs.writeFileSync(HISTORY_FILE, JSON.stringify(list.slice(0, 100), null, 2));
+}
+
+// End a process and everything it started. Children spawned with `detached` on macOS/Linux lead their own
+// process group, so the whole group gets the signal; on Windows taskkill /T walks the tree.
+export function killTree(pid) {
+  if (!pid) return;
+  try {
+    if (process.platform === "win32") execFileSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
+    else process.kill(-pid, "SIGTERM");
+  } catch {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {}
+  }
+}
+
 export function event(state, e) {
   state.events.push({ t: Date.now(), ...e });
 }
@@ -143,6 +212,13 @@ export function claudeEnv(extra = {}) {
     }
   }
   return env;
+}
+
+// How to sign the Claude CLI in, in words for this computer's OS (sign-in can't happen from the office itself).
+export function signInHint(then = "try again") {
+  const where =
+    process.platform === "win32" ? "Open PowerShell (Start menu → PowerShell)" : process.platform === "darwin" ? "Open Terminal (Spotlight → Terminal)" : "Open a terminal";
+  return `${where}, run: claude auth login — approve in the browser, then ${then}.`;
 }
 
 // Record the model an agent actually ran on ("lead" = the orchestrating session). Returns true if it changed.

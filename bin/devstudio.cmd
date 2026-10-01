@@ -25,7 +25,7 @@ if /i "%~1"=="status" (
   exit /b 0
 )
 
-where node >nul 2>&1 || (echo Node.js is required but wasn't found on PATH. & exit /b 1)
+where node >nul 2>&1 || (echo Node.js is needed but wasn't found. Install it from https://nodejs.org ^(version 20 or newer^), then run devstudio again. & exit /b 1)
 
 if defined PID (
   echo Dev Studio is already running.

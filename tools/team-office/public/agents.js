@@ -1,16 +1,33 @@
 // Agent identity. Colors are the validated dark-mode categorical palette, in fixed slot order
 // (all 8 slots validated: worst adjacent CVD ΔE 8.4, all ≥3:1 on #1a1a19) — the same color marks an agent everywhere on the page.
+// `name` + `job` are what a non-developer sees (simple view, chat, phone); `id` + `role` are the technical view.
 export const AGENTS = [
-  { id: "architect", role: "Planner / Architect", color: "#3987e5", hair: "#3b2412", skin: "#f1c27d", pants: "#2d3a55", acc: "hardhat" },
-  { id: "dev-1", role: "Developer · Package A", color: "#d95926", hair: "#141414", skin: "#c68642", pants: "#2f2f2f", acc: "headphones" },
-  { id: "dev-2", role: "Developer · Package B", color: "#199e70", hair: "#8a3f1d", skin: "#ffdbac", pants: "#3a3350", acc: "headphones", long: true },
-  { id: "tester-api", role: "Tester · API & logic", color: "#c98500", hair: "#5a3418", skin: "#e0ac69", pants: "#2b3b2b", acc: "cap" },
-  { id: "tester-ui", role: "Tester · UI / E2E", color: "#d55181", hair: "#e3c16f", skin: "#f5d0a9", pants: "#29324a", acc: "cap", long: true },
-  { id: "tester-edge", role: "Tester · Security", color: "#008300", hair: "#262626", skin: "#8d5524", pants: "#3b2b2b", acc: "cap" },
-  { id: "reviewer", role: "Reviewer", color: "#9085e9", hair: "#bdbdbd", skin: "#ffdbac", pants: "#333333", acc: "glasses" },
-  { id: "manager", role: "Manager · your contact", color: "#e66767", hair: "#4a2a14", skin: "#d9a066", pants: "#1f1f1f", acc: "headset" },
+  { id: "architect", name: "Asha", job: "Plans the work", role: "Planner / Architect", color: "#3987e5", hair: "#3b2412", skin: "#f1c27d", pants: "#2d3a55", acc: "hardhat" },
+  { id: "dev-1", name: "Ben", job: "Builds it", role: "Developer · Package A", color: "#d95926", hair: "#141414", skin: "#c68642", pants: "#2f2f2f", acc: "headphones" },
+  { id: "dev-2", name: "Chloe", job: "Builds it", role: "Developer · Package B", color: "#199e70", hair: "#8a3f1d", skin: "#ffdbac", pants: "#3a3350", acc: "headphones", long: true },
+  { id: "tester-api", name: "Diego", job: "Checks that it works", role: "Tester · API & logic", color: "#c98500", hair: "#5a3418", skin: "#e0ac69", pants: "#2b3b2b", acc: "cap" },
+  { id: "tester-ui", name: "Emma", job: "Checks it's easy to use", role: "Tester · UI / E2E", color: "#d55181", hair: "#e3c16f", skin: "#f5d0a9", pants: "#29324a", acc: "cap", long: true },
+  { id: "tester-edge", name: "Farid", job: "Checks it's safe", role: "Tester · Security", color: "#008300", hair: "#262626", skin: "#8d5524", pants: "#3b2b2b", acc: "cap" },
+  { id: "reviewer", name: "Grace", job: "Does the final check", role: "Reviewer", color: "#9085e9", hair: "#bdbdbd", skin: "#ffdbac", pants: "#333333", acc: "glasses" },
+  { id: "manager", name: "Maya", job: "Your manager", role: "Manager · your contact", color: "#e66767", hair: "#4a2a14", skin: "#d9a066", pants: "#1f1f1f", acc: "headset" },
 ];
 export const AGENT_BY_ID = Object.fromEntries(AGENTS.map((a) => [a.id, a]));
+
+// "Asha" in the simple view, "architect" behind the scenes
+export const displayName = (id, simple = true) => (simple ? AGENT_BY_ID[id]?.name : null) || id;
+
+// The pipeline in plain words: five steps (fixing is part of checking).
+export const STEPS = [
+  { key: "plan", label: "Planning", text: "Asha is working out what to build" },
+  { key: "build", label: "Building", text: "Ben and Chloe are building it" },
+  { key: "test", label: "Checking", text: "Diego, Emma and Farid are trying it out" },
+  { key: "review", label: "Final check", text: "Grace is checking everything one last time" },
+  { key: "done", label: "Ready", text: "Done" },
+];
+export const stepIndex = (phase) => ({ plan: 0, build: 1, test: 2, fix: 2, review: 3, done: 4 })[phase] ?? -1;
+
+// A task in words the user understands: the architect's "plain" title if it gave one
+export const taskLabel = (t, simple = true) => (simple && t.plain) || t.title;
 
 export const STATUS = {
   done: { icon: "✓", label: "Done" },
@@ -25,7 +42,7 @@ export const AGENT_STATE = {
   working: { icon: "⌨", label: "Working" },
   waiting: { icon: "…", label: "Waiting" },
   done: { icon: "✓", label: "Done" },
-  failed: { icon: "✖", label: "Found issues" },
+  failed: { icon: "✖", label: "Found something to fix" },
 };
 
 // A pending task whose dependencies are all done is "ready" (AmnesiaGraph semantics).

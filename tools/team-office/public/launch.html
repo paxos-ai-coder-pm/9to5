@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Opening your project…</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/style.css" />
+  <script>
+    try {
+      const t = localStorage.getItem("theme");
+      if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+    } catch {}
+  </script>
+</head>
+<body class="launch-page">
+  <main class="launch" aria-live="polite">
+    <h1 id="title">OPENING…</h1>
+    <p class="launch-status" id="status">Starting…</p>
+    <div class="launch-spinner" id="spinner" aria-hidden="true"><i></i><i></i><i></i></div>
+    <ol class="launch-steps" id="steps" hidden></ol>
+    <pre class="launch-log" id="log" hidden></pre>
+    <details class="launch-details" id="details" hidden><summary>Technical details</summary><pre id="detailsLog"></pre></details>
+    <div class="launch-actions" id="actions"></div>
+    <p class="launch-back"><a href="/">← Back to the studio</a></p>
+  </main>
+  <script type="module" src="/launch.js"></script>
+</body>
+</html>

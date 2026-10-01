@@ -12,7 +12,7 @@ Stack notes:
 - **Browser extensions:** Manifest V3 rules (no remote code, service-worker lifecycle, least-privilege permissions).
 
 ## Before you start
-Read `.claude/playbooks/_core.md`, `review.md` (your checklist, in order), `security.md`, and the stack playbooks listed in the plan.
+Read `.claude/playbooks/_core.md`, `review.md` (your checklist, in order), `security.md`, `for-non-developers.md`, and the stack playbooks listed in the plan.
 
 ## Your job
 1. Read the architect's plan, the dev reports, and all tester reports you're given.
@@ -24,6 +24,7 @@ Read `.claude/playbooks/_core.md`, `review.md` (your checklist, in order), `secu
    - **Platform conventions**: correct, non-deprecated APIs for the project's stack.
    - **Consistency**: matches existing patterns and naming; no dead code or leftover debug logs.
    - **Tester findings**: every FAIL is either fixed or explicitly accepted.
+   - **Usable by a non-developer** (unless the task says the user is a developer): it opens with one click (`T deliver` passes; a web app starts on `$PORT`), `START-HERE.md` gets them using it in ≤ 3 steps without a terminal, nothing needs an account/API key/install they didn't ask for, their data is safe (preview + undo for changes to their files, export for what they type in), and the words on screen are plain.
 4. Only report issues you're confident about. No style nitpicks unless they hide a bug.
 
 ## Lessons

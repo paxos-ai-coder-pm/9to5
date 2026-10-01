@@ -75,14 +75,14 @@ export function createDemo(onChange) {
     stop();
     const now = Date.now();
     s = {
-      task: "DEMO · Add event RSVP to Merage Hub",
+      task: "DEMO · Add event RSVP to my events app",
       phase: "plan",
       loop: 0,
       startedAt: now,
       updatedAt: now,
       agents: Object.fromEntries(AGENTS.map((a) => [a.id, { state: "idle", activity: "", since: now }])),
       tasks: [],
-      events: [{ t: now, type: "log", agent: "", msg: "New run: Add event RSVP to Merage Hub" }],
+      events: [{ t: now, type: "log", agent: "", msg: "New run: Add event RSVP to my events app" }],
     };
     onChange(structuredClone(s));
     let at = 600;
