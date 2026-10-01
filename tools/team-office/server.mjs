@@ -82,7 +82,20 @@ function readBody(req, limit = 16384) {
 
 // A chat message. `extra` may carry: proposal, relays, choices, actions [{ kind, … }], details (collapsed text), via.
 const msg = (from, text, extra = {}) => ({ id: crypto.randomUUID(), t: Date.now(), from, text, ...extra });
-const firstLine = (task) => String(task || "").split("\n")[0].slice(0, 120);
+// A task's headline for chat lines: its first clause ("Build a budget tracker for the family: spending by…" → "Build a
+// budget tracker for the family"), cut at a word if it's still long — never ending in dangling punctuation.
+const firstLine = (task) => {
+  let line = String(task || "").split("\n")[0].trim();
+  const clause = line.search(/[:;—]\s/);
+  if (line.length > 90 && clause >= 20) line = line.slice(0, clause);
+  if (line.length > 90) {
+    const cut = line.slice(0, 90);
+    const space = cut.lastIndexOf(" ");
+    line = (space > 45 ? cut.slice(0, space) : cut).replace(/[\s.,;:!?—-]+$/, "") + "…";
+  }
+  return line.replace(/[\s.,;:!?—-]+$/, "");
+};
+const sentence = (headline) => (headline.endsWith("…") ? headline : `${headline}.`);
 
 function recentEvents(s, n = 12) {
   return (s.events || [])
@@ -287,7 +300,7 @@ function onRunEvent(run) {
     const reported = s.report && s.report.t >= run.startedAt;
     const { manifest } = readManifest(run.dir);
     const canOpen = !!manifest || fs.existsSync(path.join(run.dir, "index.html"));
-    systemMessage(`✅ Finished: ${title}.${reported ? "" : canOpen ? " Press ▶ Open to try it." : " Ask me how to try it."}`, {
+    systemMessage(`✅ Finished: ${sentence(title)}${reported ? "" : canOpen ? " Press ▶ Open to try it." : " Ask me how to try it."}`, {
       actions: [...(canOpen && project ? [{ kind: "open", id: project.id }] : []), ...(project ? [{ kind: "change", id: project.id, name: project.name }] : [])],
       ...(run.summary && !reported ? { details: `Team lead's last words:\n${run.summary}` } : {}),
     });
@@ -297,7 +310,7 @@ function onRunEvent(run) {
     startNextQueued(true);
   } else if (["failed", "interrupted", "stopped"].includes(run.status)) {
     const { reason, actions } = explainFailure(run);
-    const text = run.status === "stopped" ? `■ Stopped: ${title}.` : `⚠️ ${title} — ${reason}`;
+    const text = run.status === "stopped" ? `■ Stopped: ${sentence(title)}` : `⚠️ ${title} — ${reason}`;
     systemMessage(text, {
       actions: actions.map((kind) => ({ kind, runId: run.id, ...(kind === "ask" ? { text: `What went wrong with "${title}", and can the team fix it?` } : {}) })),
       ...(run.status !== "stopped" ? { details: [run.error, run.summary && `Team lead's last words:\n${run.summary}`, run.log && `Full log: ${run.log}`].filter(Boolean).join("\n\n") } : {}),
@@ -308,7 +321,7 @@ function onRunEvent(run) {
       waiting: `⏳ Out of Claude usage — the team paused mid-run (${run.limitMessage}). It will pick up automatically where it left off at ${fmtTime(run.resumeAt)} (in ${fmtIn(run.resumeAt)}). ■ Stop cancels.`,
       "needs-answer": `⏸ The team paused because it's waiting for your answer — nothing has been built yet. Answer the question above (or just tell me) and it carries on right where it stopped.`,
       resumed: {
-        answer: `▶ Got your answer — the team is back at work on: ${title}.`,
+        answer: `▶ Got your answer — the team is back at work on: ${sentence(title)}`,
         continue: `↻ Continuing: ${title} — the team picks up where it stopped.`,
         usage: `▶ Usage limit has reset — the team is back at work on: ${title} (attempt ${run.attempts}).`,
       }[run.reason || "usage"],
@@ -544,7 +557,7 @@ function launch(proposal) {
     updateChat((c) => {
       if (c.proposal?.id === proposal.id) c.proposal = null;
       c.messages.push(
-        msg("system", `🚀 The team is starting on: ${firstLine(proposal.task)}. They'll post a plan here for your OK before building anything.`, {
+        msg("system", `🚀 The team is starting on: ${sentence(firstLine(proposal.task))} They'll post a plan here for your OK before building anything.`, {
           details: `Project folder: ${proposal.dir}${proposal.isNew ? " (new)" : ""}${skipped.length ? `\nKept this project's own versions of: ${skipped.join(", ")}` : ""}`,
         }),
       );

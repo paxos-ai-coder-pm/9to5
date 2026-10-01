@@ -172,6 +172,23 @@ describe("chat with the manager", opts, () => {
 const browser = [process.env.CHROMIUM_PATH, "/opt/pw-browsers/chromium"].filter(Boolean).find((c) => fs.existsSync(c)) || (await import("../apps.mjs")).findBrowser();
 const pictureEnv = browser ? { DEVSTUDIO_CHROME: browser } : { DEVSTUDIO_CHROME: FAKE_BROWSER, FAKE_BROWSER: "slow", FAKE_BROWSER_LOG: "fake-browser.json" };
 
+describe("long requests", opts, () => {
+  test("chat lines name the job by its first clause, without dangling punctuation", async () => {
+    const t = await setup({ lead: "finish" });
+    try {
+      const task = "Build a monthly household budget tracker for the family on one computer: spending by category, a month view with totals, quick add/edit, and export to a spreadsheet file (CSV).";
+      await t.proposeAndStart(`Shall I get the team started?\nPROPOSE: family-budget | ${task}\nSIZE: standard`);
+      await t.waitRun("finished");
+      const texts = (await t.chat()).messages.filter((m) => m.from === "system").map((m) => m.text);
+      assert.ok(texts.includes("🚀 The team is starting on: Build a monthly household budget tracker for the family on one computer. They'll post a plan here for your OK before building anything."), texts.join("\n"));
+      assert.ok(texts.some((x) => x.startsWith("✅ Finished: Build a monthly household budget tracker for the family on one computer.")), texts.join("\n"));
+      assert.ok(!texts.some((x) => /[,;:]\.|…\./.test(x)), "no ',.' or '….'");
+    } finally {
+      await t.done();
+    }
+  });
+});
+
 describe("closing the office while a picture is being taken", opts, () => {
   test("stops the browser and its helpers, and removes its temporary profile", async () => {
     const t = await setup({}, { DEVSTUDIO_CHROME: FAKE_BROWSER, FAKE_BROWSER: "hang", FAKE_BROWSER_LOG: "fake-browser.json" });

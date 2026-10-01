@@ -102,7 +102,7 @@ export function createChat({ onSetup } = {}) {
             : "";
           // the manager's suggested answers, while they're still the latest thing in the chat
           const choices = m.choices?.length && i === lastIdx && !chat.busy ? `<div class="choices">${m.choices.map((c) => `<button type="button" data-send="${esc(c)}">${esc(c)}</button>`).join("")}</div>` : "";
-          return `<li class="them${m.ask ? " question" : ""}"><span class="from"><i style="background:${a?.color || "#888"}"></i>${who(m)}${m.ask ? " · ❓ NEEDS YOUR ANSWER" : ""}</span><span class="text">${md(m.text)}</span>${m.report ? reportCard(m.report) : ""}${(m.relays || []).map((r) => `<span class="relay">${esc(r)}</span>`).join("")}${m.proposal ? proposalCard(m.proposal) : ""}${answers}${choices}${details}</li>`;
+          return `<li class="them${openAsk ? " question" : ""}"><span class="from"><i style="background:${a?.color || "#888"}"></i>${who(m)}${openAsk ? " · ❓ NEEDS YOUR ANSWER" : ""}</span><span class="text">${md(m.text)}</span>${m.report ? reportCard(m.report) : ""}${(m.relays || []).map((r) => `<span class="relay">${esc(r)}</span>`).join("")}${m.proposal ? proposalCard(m.proposal) : ""}${answers}${choices}${details}</li>`;
         })
         .join("");
     }

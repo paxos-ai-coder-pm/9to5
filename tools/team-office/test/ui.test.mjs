@@ -145,9 +145,11 @@ describe("office UI", { skip }, () => {
     assert.ok(await visible(page, "#askActions button:has-text('Cards')"));
     assert.equal(await visible(page, "#askActions button:has-text('APPROVE')"), false, "no meaningless Approve for a real choice");
     await page.waitForSelector("#progress >> text=needs your answer");
+    assert.match(await page.locator("#chatLog").innerText(), /NEEDS YOUR ANSWER/);
     await t.shot("06-question");
     await page.click("#askActions button:has-text('Cards')");
     await page.waitForSelector("#progress >> text=is ready", { timeout: 20000 });
+    assert.doesNotMatch(await page.locator("#chatLog").innerText(), /NEEDS YOUR ANSWER/, "an answered question isn't flagged any more");
     const inbox = t.srv.fakeLog().filter((l) => l.role === "lead");
     assert.equal(inbox.length, 2, "the run continued in a second (resumed) call");
   });
