@@ -15,7 +15,7 @@ import { ROOT, DIR, STATE_FILE, CHAT_FILE, readState, readChat, updateChat, upda
 import { readRun, readHistory, startRun, stopRun, isRunning, recoverRunState, continueAfterAnswer, continueRun, shutdown } from "./runner.mjs";
 import { resolveProject, knownProjects, portfolio, findProject } from "./projects.mjs";
 import { readSettings, updateSettings, projectsRoot, defaultProjectsDir } from "./settings.mjs";
-import { openApp, stopApp, appStatus, stopAllApps, showFiles, captureScreenshot, screenshotPath } from "./apps.mjs";
+import { openApp, stopApp, closeApp, appStatus, stopAllApps, showFiles, captureScreenshot, screenshotPath } from "./apps.mjs";
 import { readManifest, insidePath } from "./manifest.mjs";
 import { restoreCheckpoint } from "./checkpoint.mjs";
 import { zipDirectory } from "./zip.mjs";
@@ -449,7 +449,7 @@ async function projectAction(body) {
         return { error: e.message, code: 409 };
       }
     case "stop":
-      return { ok: stopApp(p.dir) };
+      return { ok: closeApp(p.dir) };
     case "files": {
       const r = await showFiles(p.dir);
       return r.ok ? r : { error: r.error, code: 500 };

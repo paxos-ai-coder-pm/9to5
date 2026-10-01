@@ -228,6 +228,7 @@ const alive = (pid) => {
 // the fake browser (test/fake-browser.mjs) leaves a helper process behind, like Chrome's GPU / network helpers
 async function withFakeBrowser(mode, fn) {
   const log = path.join(s.tmp, `browser-${mode}.json`);
+  fs.rmSync(log, { force: true }); // from an earlier test
   Object.assign(process.env, { DEVSTUDIO_CHROME: FAKE_BROWSER, FAKE_BROWSER: mode, FAKE_BROWSER_LOG: log });
   try {
     await fn(() => (fs.existsSync(log) ? JSON.parse(fs.readFileSync(log, "utf8")) : null));
@@ -254,9 +255,44 @@ test("apps: closing the office during a picture stops the browser", { skip: isWi
     assert.ok(alive(b.pid) && alive(b.helper));
     apps.stopAllApps(); // what the office does when it's closed
     assert.equal(await shot, null);
-    assert.match(apps.screenshotError(), /no picture from fake-browser\.mjs \(exit SIGTERM/);
+    assert.match(apps.screenshotError(), /no picture from fake-browser\.mjs \(exit SIGKILL/);
     await until(() => !alive(b.pid) && !alive(b.helper), 5000, "browser and helper stopped");
     assert.equal(fs.existsSync(b.profile), false, "temporary browser profile removed");
+  }));
+
+test("apps: ▶ Open while a picture is being taken keeps the app open afterwards", { skip: isWindows && "needs a POSIX shell" }, () =>
+  withFakeBrowser("slow", async (seen) => {
+    const p = makeProject("shot-open", { "index.html": "<h1>Hi</h1>", "devstudio.json": { name: "Open", kind: "static", howTo: ["Open"] } });
+    const shot = apps.captureScreenshot(p);
+    await until(seen, 10000, "browser started");
+    const st = await apps.openApp(p); // the user presses ▶ Open right after the run finished
+    assert.equal(st.status, "running");
+    assert.ok(await shot, `picture written (${apps.screenshotError()})`);
+    assert.equal(apps.appStatus(p.dir).status, "running", "the picture doesn't close the app the user opened");
+    assert.equal((await get(st.url)).status, 200);
+    apps.stopApp(p.dir);
+  }));
+
+test("apps: ■ Close while a picture is being taken: closed for the user, the picture still finishes", { skip: isWindows && "needs a POSIX shell" }, () =>
+  withFakeBrowser("slow", async (seen) => {
+    const p = makeProject("shot-close", { "index.html": "<h1>Hi</h1>", "devstudio.json": { name: "Close", kind: "static", howTo: ["Open"] } });
+    const shot = apps.captureScreenshot(p);
+    await until(seen, 10000, "browser started");
+    const { url } = await apps.openApp(p);
+    assert.equal(apps.closeApp(p.dir), true);
+    assert.equal(apps.appStatus(p.dir).status, "stopped", "shown as closed right away");
+    assert.ok(await shot, `picture written (${apps.screenshotError()})`);
+    await assert.rejects(get(url), "and really closed once the picture is taken");
+  }));
+
+test("apps: a picture never runs a script project (it could change the user's files)", { skip: isWindows && "needs a POSIX shell" }, () =>
+  withFakeBrowser("ok", async (seen) => {
+    const p = makeProject("shot-script", { "devstudio.json": { name: "Renamer", kind: "script", start: "node -e \"require('fs').writeFileSync('ran.txt', 'yes')\"", howTo: ["Run it"] } });
+    assert.equal(await apps.captureScreenshot(p), null);
+    assert.match(apps.screenshotError(), /open in the browser/);
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(fs.existsSync(path.join(p.dir, "ran.txt")), false, "the script didn't run");
+    assert.equal(seen(), null, "no browser started");
   }));
 
 test("apps: an empty DEVSTUDIO_CHROME turns pictures off", async () => {

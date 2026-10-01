@@ -119,23 +119,32 @@ function answers(port, p = "/") {
   return Promise.all([one("127.0.0.1"), one("::1")]).then((r) => r.some(Boolean));
 }
 
+const LIVE = ["installing", "starting", "running"];
+
 /** Public view of a running (or last run) app, for the cards and the launch page. */
 export function appStatus(dir) {
   const e = apps.get(dir);
   if (!e) return null;
-  return { status: e.status, kind: e.kind, url: e.url || null, port: e.port || null, startedAt: e.startedAt, exitCode: e.exitCode ?? null, error: e.error || null, log: e.log.slice(-60).join("\n") };
+  // running only for a picture (or closed by the user while one is taken): not open as far as the user is concerned
+  const status = !e.wanted && e.pictures > 0 && LIVE.includes(e.status) ? "stopped" : e.status;
+  return { status, kind: e.kind, url: e.url || null, port: e.port || null, startedAt: e.startedAt, exitCode: e.exitCode ?? null, error: e.error || null, log: e.log.slice(-60).join("\n") };
 }
 
-/** Open a project. Resolves as soon as the app is starting; poll appStatus() for "running". */
-export async function openApp({ name, dir }) {
+/** Open a project. Resolves as soon as the app is starting; poll appStatus() for "running".
+ *  forPicture: started (or kept running) only to take its picture — it's closed again afterwards unless the user opens it. */
+export async function openApp({ name, dir }, { forPicture = false } = {}) {
   const cur = apps.get(dir);
-  if (cur && ["installing", "starting", "running"].includes(cur.status)) return appStatus(dir);
+  if (cur && LIVE.includes(cur.status)) {
+    if (forPicture) cur.pictures++;
+    else cur.wanted = true;
+    return appStatus(dir);
+  }
   let { manifest, problems } = readManifest(dir);
   // older projects without devstudio.json: a plain index.html can still be opened
   if (!manifest && fs.existsSync(path.join(dir, "index.html"))) manifest = { name, kind: "static", entry: "index.html", howTo: ["Your app opens in the browser."] };
   if (!manifest) throw new Error(`The team didn't leave instructions for opening this project yet (${problems[0]}). Ask the manager "How do I try ${name}?"`);
 
-  const entry = { dir, name: manifest.name, kind: manifest.kind, status: "starting", startedAt: Date.now(), log: [], partial: "" };
+  const entry = { dir, name: manifest.name, kind: manifest.kind, status: "starting", startedAt: Date.now(), log: [], partial: "", wanted: !forPicture, pictures: forPicture ? 1 : 0 };
   apps.set(dir, entry);
   if (manifest.kind === "extension" || manifest.kind === "other") {
     entry.status = "manual";
@@ -144,7 +153,12 @@ export async function openApp({ name, dir }) {
   if (manifest.kind === "static") {
     entry.port = await portFor(dir);
     entry.server = http.createServer(staticHandler(dir));
-    await new Promise((resolve, reject) => entry.server.once("error", reject).listen(entry.port, "127.0.0.1", resolve));
+    try {
+      await new Promise((resolve, reject) => entry.server.once("error", reject).listen(entry.port, "127.0.0.1", resolve));
+    } catch (e) {
+      Object.assign(entry, { status: "failed", error: `Couldn't open it on port ${entry.port} (${e.code || e.message}).` }); // not stuck on "starting"
+      throw e;
+    }
     entry.url = `http://localhost:${entry.port}/${manifest.entry === "index.html" ? "" : manifest.entry}`;
     entry.status = "running";
     return appStatus(dir);
@@ -212,9 +226,22 @@ export function stopApp(dir) {
   if (e.child && e.child.exitCode === null) killTree(e.child.pid);
   return true;
 }
+/** The user's ■ Close: closed for them right away; if its picture is being taken, it stops once that's done. */
+export function closeApp(dir) {
+  const e = apps.get(dir);
+  if (!e) return false;
+  e.wanted = false;
+  if (e.pictures > 0 && LIVE.includes(e.status)) return true;
+  return stopApp(dir);
+}
 export function stopAllApps() {
   for (const dir of apps.keys()) stopApp(dir);
-  for (const shot of shots) shot.stop(); // a picture being taken when the office closes
+  // a picture being taken when the office closes: the process exits right after, so clean up here
+  for (const shot of shots) shot.stop(true);
+  for (const p of profiles)
+    try {
+      fs.rmSync(p, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    } catch {}
 }
 
 // ---------- show files ----------
@@ -256,6 +283,7 @@ export function findBrowser() {
 export const screenshotPath = (dir) => path.join(dir, ".claude", "devstudio", "screenshot.png");
 let lastShotError = null;
 const shots = new Set(); // browsers taking a picture right now
+const profiles = new Set(); // their temporary browser profiles
 const SHOT_TIMEOUT_MS = 60000;
 const SHOT_PREFIX = "devstudio-shot-";
 
@@ -273,9 +301,15 @@ function runBrowser(browser, args, env) {
     child.stdout.on("data", collect);
     child.stderr.on("data", collect);
     const shot = {
-      stop: () => {
+      // force: the office is closing — kill at once, so nothing writes into the profile while it's removed
+      stop: (force = false) => {
         stopped = true;
-        if (child.exitCode === null && child.signalCode === null) killTree(child.pid);
+        if (child.exitCode !== null || child.signalCode !== null) return;
+        if (force && posix)
+          try {
+            return process.kill(-child.pid, "SIGKILL");
+          } catch {}
+        killTree(child.pid);
       },
     };
     shots.add(shot);
@@ -322,16 +356,21 @@ export const screenshotError = () => lastShotError;
 export async function captureScreenshot(project) {
   const browser = findBrowser();
   if (!browser) return null;
-  const wasRunning = apps.get(project.dir)?.status === "running";
+  // only projects that open in the browser — never run a script (it could change the user's files) for a picture
+  const { manifest } = readManifest(project.dir);
+  const kind = manifest?.kind || (fs.existsSync(path.join(project.dir, "index.html")) ? "static" : null);
+  if (!["web", "static"].includes(kind)) {
+    lastShotError = "only projects that open in the browser get a picture";
+    return null;
+  }
+  let entry = null;
   let profile = null;
   try {
-    let st = await openApp(project);
+    await openApp(project, { forPicture: true });
+    entry = apps.get(project.dir);
     const deadline = Date.now() + START_TIMEOUT_MS + INSTALL_TIMEOUT_MS;
-    while (st && ["installing", "starting"].includes(st.status) && Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 500));
-      st = appStatus(project.dir);
-    }
-    if (st?.status !== "running" || !st.url) return null;
+    while (["installing", "starting"].includes(entry.status) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 500));
+    if (entry.status !== "running" || !entry.url) return null;
     const out = screenshotPath(project.dir);
     const fresh = out.replace(/\.png$/, ".new.png"); // a failed attempt must not wipe the previous picture
     fs.mkdirSync(path.dirname(out), { recursive: true });
@@ -340,7 +379,8 @@ export async function captureScreenshot(project) {
     const tmp = process.platform !== "win32" && fs.existsSync("/tmp") ? "/tmp" : os.tmpdir();
     removeOldProfiles(tmp);
     profile = fs.mkdtempSync(path.join(tmp, SHOT_PREFIX));
-    const args = ["--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run", "--no-default-browser-check", `--user-data-dir=${profile}`, "--window-size=1280,800", "--virtual-time-budget=4000", `--screenshot=${fresh}`, st.url];
+    profiles.add(profile);
+    const args = ["--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run", "--no-default-browser-check", `--user-data-dir=${profile}`, "--window-size=1280,800", "--virtual-time-budget=4000", `--screenshot=${fresh}`, entry.url];
     const env = { ...process.env, TMPDIR: tmp };
     const linux = process.platform === "linux";
     const tries = [await runBrowser(browser, [...(linux && process.getuid?.() === 0 ? ["--no-sandbox"] : []), ...args], env)];
@@ -359,7 +399,11 @@ export async function captureScreenshot(project) {
   } finally {
     try {
       if (profile) fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+      profiles.delete(profile);
     } catch {} // still in use (Windows): removed by a later picture
-    if (!wasRunning) stopApp(project.dir);
+    if (entry) {
+      entry.pictures--;
+      if (apps.get(project.dir) === entry && entry.pictures <= 0 && !entry.wanted) stopApp(project.dir); // opened just for the picture
+    }
   }
 }

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
-import { makeStudio, startServer, until, sleep, isWindows, FAKE_CLAUDE } from "./helpers.mjs";
+import { makeStudio, startServer, until, sleep, isWindows, FAKE_CLAUDE, FAKE_BROWSER } from "./helpers.mjs";
 
 // the fake CLI is a Node script with a shebang — Windows can't exec it directly
 const opts = { skip: isWindows && "integration tests need a POSIX shell" };
@@ -167,12 +167,38 @@ describe("chat with the manager", opts, () => {
   });
 });
 
-// the browser the product would use (Chrome / Edge / Chromium), or Playwright's Chromium when that's all there is
-const browser = [process.env.CHROMIUM_PATH, "/opt/pw-browsers/chromium"].filter(Boolean).find((c) => fs.existsSync(c)) || (await import("../apps.mjs")).findBrowser() || "";
+// the browser the product would use (Chrome / Edge / Chromium), or Playwright's Chromium; without one, the fake browser
+// (which, like Chrome, needs the page to answer — so a picture taken while the user opens and closes the app is checked too)
+const browser = [process.env.CHROMIUM_PATH, "/opt/pw-browsers/chromium"].filter(Boolean).find((c) => fs.existsSync(c)) || (await import("../apps.mjs")).findBrowser();
+const pictureEnv = browser ? { DEVSTUDIO_CHROME: browser } : { DEVSTUDIO_CHROME: FAKE_BROWSER, FAKE_BROWSER: "slow", FAKE_BROWSER_LOG: "fake-browser.json" };
+
+describe("closing the office while a picture is being taken", opts, () => {
+  test("stops the browser and its helpers, and removes its temporary profile", async () => {
+    const t = await setup({}, { DEVSTUDIO_CHROME: FAKE_BROWSER, FAKE_BROWSER: "hang", FAKE_BROWSER_LOG: "fake-browser.json" });
+    try {
+      const dir = path.join(t.s.projects, "snap-me");
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, "index.html"), "<h1>Snap</h1>");
+      fs.writeFileSync(path.join(dir, "devstudio.json"), JSON.stringify({ name: "Snap", kind: "static", entry: "index.html", howTo: ["Open"] }));
+      t.s.write("history.json", [{ id: "run-snap", project: "snap-me", dir, status: "finished", task: "Snap", title: "Snap", startedAt: Date.now() - 1000, endedAt: Date.now() }]);
+      const { projects } = (await t.srv.api("/api/portfolio")).json;
+      const id = projects.find((p) => p.name === "snap-me").id;
+      t.srv.api("/api/projects", { method: "POST", body: { action: "screenshot", id } }).catch(() => {}); // 📸 Update picture
+      const log = path.join(t.s.root, "fake-browser.json");
+      const b = await until(() => fs.existsSync(log) && JSON.parse(fs.readFileSync(log, "utf8")), 10000, "browser started");
+      assert.ok(alive(b.pid) && alive(b.helper) && fs.existsSync(b.profile));
+      await t.srv.stop();
+      await until(() => !alive(b.pid) && !alive(b.helper), 5000, "browser and helper stopped");
+      assert.equal(fs.existsSync(b.profile), false, "temporary browser profile removed");
+    } finally {
+      await t.done();
+    }
+  });
+});
 
 describe("a whole run: plan → build → deliver → open → change → undo", opts, () => {
   let t, proj;
-  before(async () => (t = await setup({ lead: "finish" }, { DEVSTUDIO_CHROME: browser })));
+  before(async () => (t = await setup({ lead: "finish" }, pictureEnv)));
   after(() => t.done());
 
   test("the run finishes with a plain report and an Open button", async () => {
@@ -219,7 +245,7 @@ describe("a whole run: plan → build → deliver → open → change → undo",
     assert.equal((await t.srv.api("/api/projects", { method: "POST", body: { action: "stop", id: proj.id } })).json.ok, true);
   });
 
-  test("a picture of the result is taken after the run (when a browser is available)", { skip: !browser && "no Chrome/Chromium installed" }, async () => {
+  test("a picture of the result is taken after the run — even though the user opened and closed the app meanwhile", async () => {
     const r = await until(async () => {
       const x = await t.srv.api(`/api/projects/${proj.id}/screenshot`);
       return x.status === 200 ? x : null;
@@ -389,23 +415,26 @@ describe("failures are explained", opts, () => {
   test("closing the office mid-run: the run is marked interrupted and can be continued", async () => {
     const s = makeStudio();
     let srv = await startServer(s, { control: { lead: "long", onResume: "finish" } });
-    const c1 = async () => (await srv.api("/api/chat")).json;
-    srv.control({ lead: "long", onResume: "finish", manager: [PROPOSE("sleepy-app")] });
-    await srv.api("/api/chat", { method: "POST", body: { text: "go" } });
-    const p = await until(async () => (await c1()).proposal, 10000, "proposal");
-    await srv.api("/api/run", { method: "POST", body: { action: "start", proposalId: p.id } });
-    const run = await until(() => (fs.existsSync(path.join(s.state, "run.json")) && s.read("run.json").sessionId ? s.read("run.json") : null), 10000, "session");
-    await srv.stop(); // SIGTERM: the office takes the run down with it
-    await until(() => !alive(run.pid), 5000, "lead gone with the office");
-    srv = await startServer(s, { control: { lead: "long", onResume: "finish" } });
-    assert.equal(s.read("run.json").status, "interrupted");
-    const msg = (await (await srv.api("/api/chat")).json).messages.at(-1);
-    assert.match(msg.text, /office was closed/);
-    assert.equal(msg.actions[0].kind, "continue");
-    await srv.api("/api/run", { method: "POST", body: { action: "continue", runId: run.id } });
-    await until(() => s.read("run.json").status === "finished", 15000, "continued run finished");
-    await srv.stop();
-    s.cleanup();
+    try {
+      const c1 = async () => (await srv.api("/api/chat")).json;
+      srv.control({ lead: "long", onResume: "finish", manager: [PROPOSE("sleepy-app")] });
+      await srv.api("/api/chat", { method: "POST", body: { text: "go" } });
+      const p = await until(async () => (await c1()).proposal, 10000, "proposal");
+      await srv.api("/api/run", { method: "POST", body: { action: "start", proposalId: p.id } });
+      const run = await until(() => (fs.existsSync(path.join(s.state, "run.json")) && s.read("run.json").sessionId ? s.read("run.json") : null), 10000, "session");
+      await srv.stop(); // SIGTERM: the office takes the run down with it (a teammate may be killed mid-write, holding the lock)
+      await until(() => !alive(run.pid), 5000, "lead gone with the office");
+      srv = await startServer(s, { control: { lead: "long", onResume: "finish" } });
+      assert.equal(s.read("run.json").status, "interrupted");
+      const msg = (await (await srv.api("/api/chat")).json).messages.at(-1);
+      assert.match(msg.text, /office was closed/, "posted before the office says it's ready");
+      assert.equal(msg.actions[0].kind, "continue");
+      await srv.api("/api/run", { method: "POST", body: { action: "continue", runId: run.id } });
+      await until(() => s.read("run.json").status === "finished", 15000, "continued run finished");
+    } finally {
+      await srv.stop();
+      s.cleanup();
+    }
   });
 });
 

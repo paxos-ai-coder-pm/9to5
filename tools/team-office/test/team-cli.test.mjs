@@ -103,3 +103,32 @@ test("report posts a plain-language summary card into the chat", () => {
   assert.deepEqual(m.report, report);
   assert.equal(state().report.summary, "Your app is ready.");
 });
+
+test("a teammate killed while writing doesn't block the others", () => {
+  const dead = spawnSync(process.execPath, ["-e", ""]).pid; // a process that has already exited
+  const lock = path.join(s.state, ".lock");
+  fs.mkdirSync(lock);
+  fs.writeFileSync(path.join(lock, "owner"), String(dead));
+  const t0 = Date.now();
+  const r = T("say", "dev-1", "still here");
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(Date.now() - t0 < 3000, `no waiting for the lock to go stale (${Date.now() - t0} ms)`);
+  assert.ok(chat().messages.some((m) => m.text === "still here"));
+  assert.equal(fs.existsSync(lock), false);
+});
+
+test("a lock held by a working teammate is waited for, not broken", async () => {
+  const lock = path.join(s.state, ".lock");
+  fs.mkdirSync(lock);
+  fs.writeFileSync(path.join(lock, "owner"), String(process.pid)); // alive
+  const t0 = Date.now();
+  const child = spawn(process.execPath, [path.join(s.office, "team.mjs"), "say", "dev-2", "after you"], { cwd: project, stdio: "ignore" });
+  const exited = new Promise((resolve) => child.once("exit", resolve));
+  await new Promise((r) => setTimeout(r, 600));
+  assert.ok(fs.existsSync(lock), "the working teammate's lock is still there");
+  assert.ok(!chat().messages.some((m) => m.text === "after you"), "nothing written while the lock is held");
+  fs.rmSync(lock, { recursive: true, force: true });
+  assert.equal(await exited, 0);
+  assert.ok(Date.now() - t0 >= 600);
+  assert.ok(chat().messages.some((m) => m.text === "after you"));
+});

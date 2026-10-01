@@ -39,17 +39,57 @@ function sleep(ms) {
 }
 
 // Several processes (both devs, the server) write concurrently, so serialize read-modify-write with a lock directory.
+// The lock records its owner's pid, so one left by a process that was killed (office closed, run stopped) is broken
+// right away instead of blocking everyone until it's 10 s old.
+const lockOwner = (dir) => {
+  try {
+    return fs.readFileSync(path.join(dir, "owner"), "utf8");
+  } catch {
+    return null;
+  }
+};
+const gone = (pid) => {
+  try {
+    process.kill(Number(pid), 0);
+    return false;
+  } catch (e) {
+    return e.code === "ESRCH";
+  }
+};
+function breakStaleLock() {
+  const owner = lockOwner(LOCK);
+  let stale = !!owner && gone(owner);
+  try {
+    stale ||= Date.now() - fs.statSync(LOCK).mtimeMs > 10000;
+  } catch {
+    return; // released meanwhile
+  }
+  if (!stale) return;
+  // move it aside first: if another process broke it and took a fresh lock meanwhile, that one is put back
+  const aside = `${LOCK}.stale-${process.pid}-${Date.now()}`;
+  try {
+    fs.renameSync(LOCK, aside);
+  } catch {
+    return;
+  }
+  if (lockOwner(aside) !== owner)
+    try {
+      return fs.renameSync(aside, LOCK);
+    } catch {}
+  fs.rmSync(aside, { recursive: true, force: true });
+}
 export function withLock(fn) {
   fs.mkdirSync(DIR, { recursive: true });
   const deadline = Date.now() + 5000;
   for (;;) {
     try {
       fs.mkdirSync(LOCK);
+      try {
+        fs.writeFileSync(path.join(LOCK, "owner"), String(process.pid));
+      } catch {}
       break;
     } catch {
-      try {
-        if (Date.now() - fs.statSync(LOCK).mtimeMs > 10000) fs.rmSync(LOCK, { recursive: true, force: true });
-      } catch {}
+      breakStaleLock();
       if (Date.now() > deadline) throw new Error("Could not acquire lock on " + LOCK);
       sleep(50);
     }
