@@ -14,6 +14,8 @@ import { zipDirectory, crc32, listFiles } from "../zip.mjs";
 import { createCheckpoint, restoreCheckpoint, gitAvailable, hasCheckpoint } from "../checkpoint.mjs";
 import { parseAuthStatus } from "../health.mjs";
 import { createStreamParser } from "../stream.mjs";
+import { claudeEnv } from "../lib.mjs";
+import { REPO } from "./helpers.mjs";
 
 const temps = [];
 const tmpdir = () => {
@@ -196,7 +198,7 @@ test("zip: round-trips files and leaves out secrets, git and dependencies", () =
   fs.writeFileSync(path.join(dir, "src", "app.js"), "console.log(1)");
   fs.writeFileSync(path.join(dir, ".env"), "SECRET=1");
   fs.writeFileSync(path.join(dir, ".env.example"), "SECRET=");
-  for (const d of ["node_modules/x", ".git", ".claude/team"]) {
+  for (const d of ["node_modules/x", ".git", ".claude/team", ".devstudio"]) {
     fs.mkdirSync(path.join(dir, d), { recursive: true });
     fs.writeFileSync(path.join(dir, d, "f"), "no");
   }
@@ -209,6 +211,29 @@ test("zip: round-trips files and leaves out secrets, git and dependencies", () =
     fs.writeFileSync(z, zipDirectory(dir));
     execFileSync("unzip", ["-tq", z]); // throws if the archive is corrupt
   }
+});
+
+test("claudeEnv: a team run doesn't inherit the Claude Code session the office was started from", () => {
+  const keep = { ...process.env };
+  Object.assign(process.env, { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "parent-session", CLAUDE_CODE_REMOTE_SESSION_ID: "cse_parent", CLAUDE_CODE_CHILD_SESSION: "1", CLAUDE_CODE_MESSAGING_SOCKET: "/tmp/parent.sock", CLAUDE_CODE_MESSAGING_TOKEN: "t", CLAUDE_PID: "1", CLAUDE_CODE_MAX_OUTPUT_TOKENS: "8000" });
+  try {
+    const env = claudeEnv({ TEAM_CLI: "/x/team.mjs" });
+    for (const k of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_REMOTE_SESSION_ID", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_PID"]) assert.equal(env[k], undefined, k);
+    assert.equal(env.CLAUDE_CODE_MAX_OUTPUT_TOKENS, "8000", "the user's own settings are kept");
+    assert.equal(env.TEAM_CLI, "/x/team.mjs");
+  } finally {
+    for (const k of Object.keys(process.env)) if (!(k in keep)) delete process.env[k];
+    Object.assign(process.env, keep);
+  }
+});
+
+test("the team's instructions never have the model save files under .claude/ (Claude Code refuses that in a headless run)", () => {
+  const files = [path.join(REPO, ".claude", "skills", "team", "SKILL.md"), ...fs.readdirSync(path.join(REPO, ".claude", "agents")).map((f) => path.join(REPO, ".claude", "agents", f))];
+  for (const f of files) {
+    const bad = fs.readFileSync(f, "utf8").split("\n").filter((l) => /\b(save|write|create|put)\b[^\n]{0,80}`\.claude\//i.test(l));
+    assert.deepEqual(bad, [], path.basename(f));
+  }
+  assert.match(fs.readFileSync(files[0], "utf8"), /`\.devstudio\/graph\.json`/);
 });
 
 test("zip: refuses projects over the size limit", () => {

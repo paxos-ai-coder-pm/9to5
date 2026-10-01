@@ -37,7 +37,7 @@ If you were launched from the team office (the prompt says so), the user is *not
 ## 1. Plan
 `T phase plan` · `T agent architect working "Working out the plan"` · spawn `architect` with the task and the team size.
 When it returns:
-- Save its "Execution graph" JSON block to `.claude/team/graph.json` (in the project directory), then `T tasks .claude/team/graph.json` (fix and retry if it reports an unknown dependency).
+- Save its "Execution graph" JSON block to `.devstudio/graph.json` (in the project directory — the team's working folder; never under `.claude/`, which Claude Code protects), then `T tasks .devstudio/graph.json` (fix and retry if it reports an unknown dependency).
 - `T agent architect done "Plan ready"`.
 - If it lists OPEN QUESTIONS, ask the user (AskUserQuestion interactively; `T ask … --options` in headless mode) before continuing.
 - Check the plan has **What you'll get**, **Playbooks** and **Definition of done** sections; if not, send it back to the architect.
@@ -73,4 +73,4 @@ Run every command in the plan's **Definition of done** yourself and read the out
 Make sure this run left at least one specific lesson (`T lessons` to check; the reviewer normally records them). If the run hit a problem that cost a fix loop, record its root cause with `T lesson "…"` — future runs start by reading these.
 
 ## 7. Report to the user
-Write a plain-language report as JSON — `{ "summary": "…", "got": […], "howToOpen": […], "notYet": […], "next": […] }` (one sentence; then short lists in the user's words: what they got, how to open it, what isn't in this version, ideas for next time) — save it as `.claude/team/report.json` and post it with `T report .claude/team/report.json`. Interactively, also give the technical summary in your reply: files changed, test verdicts, review verdict, verification-gate results. Never commit or push unless the user asks.
+Write a plain-language report as JSON — `{ "summary": "…", "got": […], "howToOpen": […], "notYet": […], "next": […] }` (one sentence; then short lists in the user's words: what they got, how to open it, what isn't in this version, ideas for next time) — save it as `.devstudio/report.json` and post it with `T report .devstudio/report.json`. Interactively, also give the technical summary in your reply: files changed, test verdicts, review verdict, verification-gate results. Never commit or push unless the user asks.

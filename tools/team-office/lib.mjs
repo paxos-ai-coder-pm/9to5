@@ -190,9 +190,14 @@ export function setAgent(state, name, st, activity = "") {
 // Environment for spawning the Claude CLI. Drops CLAUDECODE (lets it run from inside a Claude Code session) and,
 // when requests go to Anthropic, stale non-Claude model overrides inherited from a parent process (e.g. an old
 // MiniMax setup) — those would make the CLI request a model Anthropic doesn't serve.
+// Variables that tie a process to the Claude Code session it runs in. An office started from inside a session (the
+// app's preview, a terminal in Claude Code) would otherwise hand them to every team run and manager reply: they'd run
+// under that session's id (and --resume it), and talk to its messaging socket.
+const PARENT_SESSION = ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_REMOTE_SESSION_ID", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_PID"];
+
 export function claudeEnv(extra = {}) {
   const env = { ...process.env, ...extra };
-  delete env.CLAUDECODE;
+  for (const k of PARENT_SESSION) delete env[k];
   // Started from inside a Claude app session (e.g. its preview pane)? That session's private auth token is inherited
   // but isn't valid for the standalone CLI, and it would override your own `claude auth login`. Drop it.
   // The app also routes its sessions through its own endpoint (ANTHROPIC_BASE_URL), which rejects normal logins.

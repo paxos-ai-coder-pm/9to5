@@ -109,7 +109,9 @@ export function prepareProject(p, { lightTeam = readSettings().lightTeam } = {})
   const cur = fs.existsSync(gi) ? fs.readFileSync(gi, "utf8") : "";
   if (!cur.includes(".claude/team/")) {
     const extra = p.isNew ? "node_modules/\n.env\n" : "";
-    fs.appendFileSync(gi, `${cur && !cur.endsWith("\n") ? "\n" : ""}# team run state\n.claude/team/\ntests/scratch/\n${extra}`);
+    fs.appendFileSync(gi, `${cur && !cur.endsWith("\n") ? "\n" : ""}# team run state\n.claude/team/\n.devstudio/\ntests/scratch/\n${extra}`);
+  } else if (!cur.includes(".devstudio/")) {
+    fs.appendFileSync(gi, `${cur.endsWith("\n") ? "" : "\n"}.devstudio/\n`); // the team's working files (plan, report)
   }
   return { skipped };
 }

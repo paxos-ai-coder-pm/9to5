@@ -111,6 +111,12 @@ test("prepareProject: seeds the team, respects the project's own files, refreshe
   assert.match(fs.readFileSync(path.join(p.dir, ".claude", "agents", "reviewer.md"), "utf8"), /^model: opus$/m);
   // .gitignore isn't appended twice
   assert.equal(fs.readFileSync(path.join(p.dir, ".gitignore"), "utf8").match(/\.claude\/team\//g).length, 1);
+  assert.equal(fs.readFileSync(path.join(p.dir, ".gitignore"), "utf8").match(/^\.devstudio\/$/gm).length, 1, "the team's working folder is ignored");
+  // a project set up before the working folder existed gets it added once
+  fs.writeFileSync(path.join(p.dir, ".gitignore"), "# team run state\n.claude/team/\ntests/scratch/");
+  projects.prepareProject(p, { lightTeam: false });
+  projects.prepareProject(p, { lightTeam: false });
+  assert.equal(fs.readFileSync(path.join(p.dir, ".gitignore"), "utf8"), "# team run state\n.claude/team/\ntests/scratch/\n.devstudio/\n");
 });
 
 // ---------- opening apps ----------
