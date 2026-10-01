@@ -16,6 +16,7 @@ import { readRun, readHistory, startRun, stopRun, isRunning, recoverRunState, co
 import { resolveProject, knownProjects, portfolio, findProject } from "./projects.mjs";
 import { readSettings, updateSettings, projectsRoot, defaultProjectsDir } from "./settings.mjs";
 import { openApp, stopApp, closeApp, appStatus, stopAllApps, showFiles, captureScreenshot, screenshotPath } from "./apps.mjs";
+import { codeVersion } from "./version.mjs";
 import { readManifest, insidePath } from "./manifest.mjs";
 import { restoreCheckpoint } from "./checkpoint.mjs";
 import { zipDirectory } from "./zip.mjs";
@@ -30,6 +31,7 @@ const PUBLIC = path.join(HERE, "public");
 const PORT = Number(process.argv[2] ?? process.env.PORT ?? 4400);
 const REPLY_TIMEOUT_MS = 180000;
 const PID_FILE = path.join(DIR, "office.json"); // lets `devstudio status/stop` find this server
+const VERSION = codeVersion(); // the code this office was started with
 
 // Which GitHub account `gh` is signed in to (shown on publishing proposals and to the manager). Refreshed every 10 min.
 let githubAccount = null;
@@ -601,7 +603,8 @@ async function handle(req, res) {
   };
   const reply = (r, ok = 200) => send(res, r.error ? r.code || 400 : ok, r);
 
-  if (route === "/api/ping") return send(res, 200, { app: "devstudio", pid: process.pid, name: readSettings().studioName });
+  // the launcher uses this to find the office, and to tell one started before an update (version) or mid-run (busy)
+  if (route === "/api/ping") return send(res, 200, { app: "devstudio", pid: process.pid, name: readSettings().studioName, version: VERSION, busy: isRunning() });
 
   if (route === "/api/state") {
     let state = {};
@@ -773,7 +776,7 @@ const server = http
   });
 server.on("error", (e) => {
   if (e.code !== "EADDRINUSE") throw e;
-  console.error(`Port ${PORT} is already in use — the Dev Studio is probably already running: open http://localhost:${PORT}\n(or start it on another port: node tools/team-office/server.mjs <port>)`);
+  console.error(`Port ${PORT} is already in use. Start the Dev Studio with bin/devstudio (Windows: bin\\devstudio.cmd) — it opens the office if it's already running, replaces an older version, and says if another program has the port.\n(Or start it on another port: node tools/team-office/server.mjs <port>)`);
   process.exit(1);
 });
 process.on("exit", () => {
