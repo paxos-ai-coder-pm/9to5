@@ -287,10 +287,29 @@ const profiles = new Set(); // their temporary browser profiles
 const SHOT_TIMEOUT_MS = 60000;
 const SHOT_PREFIX = "devstudio-shot-";
 
+// A PNG is complete once it ends with its IEND chunk (the browser may still be writing it).
+function pngComplete(file) {
+  try {
+    const fd = fs.openSync(file, "r");
+    try {
+      const { size } = fs.fstatSync(fd);
+      if (size < 20) return false;
+      const tail = Buffer.alloc(12);
+      fs.readSync(fd, tail, 0, 12, size - 12);
+      return tail.toString("latin1", 4, 8) === "IEND";
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return false;
+  }
+}
+
 // Run the browser once, in its own process group, and always stop the whole group afterwards: its helpers
-// (GPU, network, renderers) must not outlive it, a hung browser, or the office.
+// (GPU, network, renderers) must not outlive it, a hung browser, or the office. Chrome on macOS writes the
+// picture and then doesn't quit, so once `picture` is complete the browser is stopped instead of waited for.
 // Resolves to { text: "exit …: what it said", stopped: whether it was stopped (timed out / the office closing) }.
-function runBrowser(browser, args, env) {
+function runBrowser(browser, args, env, picture) {
   return new Promise((resolve) => {
     const posix = process.platform !== "win32";
     const child = spawn(browser, args, { env, windowsHide: true, detached: posix, stdio: ["ignore", "pipe", "pipe"] });
@@ -314,11 +333,17 @@ function runBrowser(browser, args, env) {
     };
     shots.add(shot);
     const timer = setTimeout(shot.stop, SHOT_TIMEOUT_MS);
+    const watch = setInterval(() => {
+      if (!pngComplete(picture)) return;
+      clearInterval(watch);
+      if (child.exitCode === null && child.signalCode === null) killTree(child.pid); // done: don't wait for it to quit
+    }, 250);
     let grace = null;
     const end = (what) => {
       if (ended) return;
       ended = true;
       clearTimeout(timer);
+      clearInterval(watch);
       clearTimeout(grace);
       shots.delete(shot);
       const said = out.split("\n").filter((l) => l.trim() && !/crashpad|cpufreq/.test(l)).slice(-12).join("\n");
@@ -383,10 +408,10 @@ export async function captureScreenshot(project) {
     const args = ["--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run", "--no-default-browser-check", `--user-data-dir=${profile}`, "--window-size=1280,800", "--virtual-time-budget=4000", `--screenshot=${fresh}`, entry.url];
     const env = { ...process.env, TMPDIR: tmp };
     const linux = process.platform === "linux";
-    const tries = [await runBrowser(browser, [...(linux && process.getuid?.() === 0 ? ["--no-sandbox"] : []), ...args], env)];
+    const tries = [await runBrowser(browser, [...(linux && process.getuid?.() === 0 ? ["--no-sandbox"] : []), ...args], env, fresh)];
     // Linux containers / AppArmor often have no usable sandbox; the page is the user's own app on localhost
-    if (!fs.existsSync(fresh) && linux && !tries[0].stopped) tries.push(await runBrowser(browser, ["--no-sandbox", ...args], env));
-    if (!fs.existsSync(fresh)) {
+    if (!pngComplete(fresh) && linux && !tries[0].stopped) tries.push(await runBrowser(browser, ["--no-sandbox", ...args], env, fresh));
+    if (!pngComplete(fresh)) {
       lastShotError = `no picture from ${path.basename(browser)} (${tries.map((t) => t.text).join(" | then: ")})`;
       return null;
     }

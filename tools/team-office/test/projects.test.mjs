@@ -247,6 +247,17 @@ test("apps: no browser processes or temporary profiles are left behind after a p
     assert.equal(fs.existsSync(b.profile), false, "temporary browser profile removed");
   }));
 
+test("apps: a browser that doesn't quit after the picture (Chrome on macOS) is stopped as soon as it's written", { skip: isWindows && "needs a POSIX shell" }, () =>
+  withFakeBrowser("linger", async (seen) => {
+    const p = makeProject("shot-linger", { "index.html": "<h1>Hi</h1>", "devstudio.json": { name: "Linger", kind: "static", howTo: ["Open"] } });
+    const t0 = Date.now();
+    const file = await apps.captureScreenshot(p);
+    assert.ok(file && fs.existsSync(file), `picture written (${apps.screenshotError()})`);
+    assert.ok(Date.now() - t0 < 10000, `no waiting for the browser to quit by itself (${Date.now() - t0} ms)`);
+    const b = seen();
+    await until(() => !alive(b.pid) && !alive(b.helper), 5000, "browser and helper stopped");
+  }));
+
 test("apps: closing the office during a picture stops the browser", { skip: isWindows && "needs a POSIX shell" }, () =>
   withFakeBrowser("hang", async (seen) => {
     const p = makeProject("shot-hang", { "index.html": "<h1>Hi</h1>", "devstudio.json": { name: "Hang", kind: "static", howTo: ["Open"] } });

@@ -2,7 +2,8 @@
 // Stands in for headless Chrome in the screenshot tests. Like the real one it starts a helper process (which stays in
 // its process group), and records {pid, helper, profile} in FAKE_BROWSER_LOG. FAKE_BROWSER=hang never finishes;
 // otherwise it loads the page (FAKE_BROWSER=slow: after 1.5 s), writes a picture if the page answered, and exits,
-// leaving the helper running — the office has to clean up after it.
+// leaving the helper running — the office has to clean up after it. FAKE_BROWSER=linger writes the picture and then
+// doesn't quit (like Chrome on macOS).
 import fs from "node:fs";
 import { spawn } from "node:child_process";
 
@@ -19,5 +20,6 @@ else
     }
     // a 1×1 PNG
     fs.writeFileSync(arg("screenshot"), Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"));
-    process.exit(0);
+    if (process.env.FAKE_BROWSER === "linger") setInterval(() => {}, 1000);
+    else process.exit(0);
   }, process.env.FAKE_BROWSER === "slow" ? 1500 : 0);
