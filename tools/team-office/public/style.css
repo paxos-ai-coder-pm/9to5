@@ -110,11 +110,19 @@ a { color: var(--link); }
   display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px;
   padding: 16px 24px; border-bottom: 3px solid var(--border); background: var(--surface-1);
 }
-.brand { display: flex; align-items: center; gap: 14px; min-width: min(100%, 340px); flex: 1 1 340px; }
-.logo {
-  width: 36px; height: 36px; flex: none;
-  background: linear-gradient(90deg, transparent 25%, #fab219 25% 75%, transparent 75%) 0 0/100% 25% no-repeat, linear-gradient(#3987e5, #3987e5) 0 25%/100% 75% no-repeat;
+.brand { display: flex; align-items: flex-start; gap: 14px; min-width: min(100%, 340px); flex: 1 1 340px; }
+.logo-mark { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; flex: none; }
+.logo-tile {
+  width: 44px; height: 44px; flex: none; display: block; overflow: visible;
   image-rendering: pixelated;
+  box-shadow:
+    0 -3px 0 0 var(--border), 0 3px 0 0 var(--border),
+    -3px 0 0 0 var(--border), 3px 0 0 0 var(--border),
+    4px 4px 0 0 var(--shadow);
+}
+.logo-mark h1 {
+  font-size: 6px; color: var(--text-muted); letter-spacing: 0;
+  line-height: 1.6; margin: 0; max-width: 96px; white-space: normal;
 }
 .brand-text { min-width: 0; }
 .headline { margin: 6px 0 0; color: var(--text-primary); font-size: 24px; line-height: 1.1; }
@@ -494,6 +502,8 @@ td.muted { color: var(--text-muted); }
 /* ---------- launch page ---------- */
 .launch-page { display: grid; place-items: center; min-height: 100vh; padding: 16px; }
 .launch { width: min(640px, 100%); background: var(--surface-1); padding: 24px; display: grid; gap: 14px; box-shadow: 0 -3px 0 0 var(--border), 0 3px 0 0 var(--border), -3px 0 0 0 var(--border), 3px 0 0 0 var(--border); }
+.launch-brand { display: flex; align-items: center; gap: 10px; }
+.launch-studio-name { font-family: var(--px); font-size: 8px; color: var(--text-muted); letter-spacing: 0.5px; line-height: 1.5; }
 .launch h1 { font-size: 16px; line-height: 1.5; }
 .launch-status { margin: 0; font-size: 23px; line-height: 1.2; }
 .launch-spinner { display: flex; gap: 8px; }

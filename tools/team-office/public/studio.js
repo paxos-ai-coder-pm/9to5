@@ -24,6 +24,11 @@ export function createStudio({ chat, setup }) {
   let renderedAskKey = "";
   let studioName = "Vikrant's Dev Studio";
 
+  function getInitials(name) {
+    const letters = name.match(/\b[A-Za-z]/g);
+    return letters && letters.length >= 2 ? letters.slice(0, 4).join("").toUpperCase() : "VDS";
+  }
+
   // ---------- plain-English status ----------
   function headline(s) {
     const run = s.run;
@@ -254,6 +259,8 @@ export function createStudio({ chat, setup }) {
         studioName = s.studioName;
         $("studioName").textContent = studioName.toUpperCase();
         $("welcomeTitle").textContent = `WELCOME TO ${studioName.toUpperCase()}`;
+        const abbrEl = $("logoAbbr");
+        if (abbrEl) abbrEl.textContent = getInitials(studioName);
       }
       $("headline").textContent = headline(s);
       renderAsk(s);
