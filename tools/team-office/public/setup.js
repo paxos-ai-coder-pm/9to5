@@ -1,5 +1,5 @@
 // Setup checklist (shown until Claude is installed and signed in) and the ⚙ Settings dialog.
-import { esc } from "./agents.js";
+import { esc, AGENTS, prettyModel } from "./agents.js";
 import { createDialog, postJson, copyText } from "./ui.js";
 
 export function createSetup({ onSettings } = {}) {
@@ -74,11 +74,24 @@ export function createSetup({ onSettings } = {}) {
     $("setLight").checked = !!settings.lightTeam;
     for (const r of document.querySelectorAll('input[name="theme"]')) r.checked = r.value === theme();
   }
+  function renderModels(configured, actual) {
+    const el = $("teamModels");
+    if (!el) return;
+    el.innerHTML = AGENTS.map((a) => {
+      const raw = actual?.[a.id] || configured?.[a.id] || "";
+      const label = prettyModel(raw) || "—";
+      return `<div class="tm-row"><span class="tm-name"><i class="tm-dot" style="background:${esc(a.color)}"></i>${esc(a.name)} <span class="muted">· ${esc(a.job.toLowerCase())}</span></span><span class="tm-model">${esc(label)}</span></div>`;
+    }).join("");
+  }
+
   async function openSettings() {
     $("settingsError").hidden = true;
-    try {
-      settings = await (await fetch("/api/settings", { cache: "no-store" })).json();
-    } catch {}
+    const [sRes, stRes] = await Promise.allSettled([
+      fetch("/api/settings", { cache: "no-store" }).then((r) => r.json()),
+      fetch("/api/state", { cache: "no-store" }).then((r) => r.json()),
+    ]);
+    if (sRes.status === "fulfilled") settings = sRes.value;
+    if (stRes.status === "fulfilled") renderModels(stRes.value.configuredModels, stRes.value.models);
     fill();
     load();
     dialog.open();

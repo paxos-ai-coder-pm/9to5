@@ -521,7 +521,7 @@ export function createOffice({ canvas, overlay, tip, onSelect }) {
       (ag.since ? ` <span class="muted">· ${fmtDur(now - ag.since)}</span>` : "") +
       (ag.activity && !simple ? `<br><span class="muted">${esc(ag.activity)}</span>` : "") +
       (owned.length ? `<br>${simple ? "Parts" : "Tasks"}: ${doneN}/${owned.length} done` : "") +
-      (modelFor(state, id) && !simple ? `<br><span class="muted">model:</span> ${esc(modelFor(state, id).label)}${modelFor(state, id).actual ? "" : " <span class=\"muted\">(configured)</span>"}` : "") +
+      (modelFor(state, id) ? `<br><span class="muted">AI model:</span> ${esc(modelFor(state, id).label)}` : "") +
       (id === "manager" ? `<br><span class="muted">Click to chat 💬</span>` : "");
     tip.hidden = false;
     const ox = e.clientX - r.left + 14;

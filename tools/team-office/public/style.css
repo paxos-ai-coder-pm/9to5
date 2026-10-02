@@ -471,6 +471,13 @@ td.muted { color: var(--text-muted); }
 .settings-form fieldset label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
 .safety { margin-top: 16px; }
 .safety p { margin: 6px 0 0; }
+.models-sub { margin-top: 14px; margin-bottom: 6px; }
+.team-models { display: grid; gap: 2px; }
+.tm-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 18px; color: var(--text-secondary); padding: 4px 0; border-bottom: 1px solid var(--grid); }
+.tm-row:last-child { border-bottom: none; }
+.tm-name { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.tm-dot { width: 9px; height: 9px; flex: none; display: inline-block; }
+.tm-model { color: var(--text-primary); font-size: 17px; white-space: nowrap; letter-spacing: 0.5px; }
 #phoneBtn.on { background: var(--good); box-shadow: none; }
 
 /* ---------- my projects ---------- */
