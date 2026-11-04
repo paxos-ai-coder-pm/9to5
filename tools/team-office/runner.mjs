@@ -12,7 +12,7 @@ import { ROOT, DIR, updateState, setModel, readState, readChat, claudeEnv, signI
 import { resolveProject, prepareProject, T_CMD, TEAM_CLI } from "./projects.mjs";
 import { readSettings } from "./settings.mjs";
 import { createCheckpoint } from "./checkpoint.mjs";
-import { CLAUDE_BIN } from "./health.mjs";
+import { resolveClaude } from "./health.mjs";
 import { createStreamParser } from "./stream.mjs";
 
 export { readRun, readHistory };
@@ -102,9 +102,9 @@ export function recoverRunState(handler) {
 export function parseResetTime(text, now = Date.now()) {
   const m = String(text || "").match(/resets?\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:\(([\w/+-]+)\))?/i);
   if (!m) return null;
-  let h = +m[1] % 12;
+  // "3pm" / "12am" (12-hour clock) or "15:00" (24-hour clock)
+  let h = m[3] ? +m[1] % 12 : +m[1];
   if ((m[3] || "").toLowerCase() === "pm") h += 12;
-  if (!m[3] && +m[1] === 12) h = 12;
   const min = +(m[2] || 0);
   const tz = m[4] || Intl.DateTimeFormat().resolvedOptions().timeZone;
   // wall-clock (h:min in tz) → UTC instant; try today and tomorrow in that zone, take the first one in the future
@@ -250,7 +250,8 @@ function spawnRun(run, prompt, resumeSessionId) {
   if (run.lightTeam) args.push("--model", "sonnet");
   if (resumeSessionId) args.push("--resume", resumeSessionId);
   // detached on macOS/Linux = its own process group, so ■ Stop can end the lead and everything it started (killTree)
-  child = spawn(CLAUDE_BIN, args, { cwd: run.dir, env: claudeEnv({ TEAM_CLI }), windowsHide: true, detached: process.platform !== "win32" });
+  const [bin, pre] = resolveClaude();
+  child = spawn(bin, [...pre, ...args], { cwd: run.dir, env: claudeEnv({ TEAM_CLI }), windowsHide: true, detached: process.platform !== "win32" });
   stopping = false;
 
   const current = { ...run, status: "running", pid: child.pid, resumeAt: undefined, error: undefined, summary: undefined, question: undefined };

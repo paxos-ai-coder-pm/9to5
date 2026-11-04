@@ -20,7 +20,7 @@ import { codeVersion } from "./version.mjs";
 import { readManifest, insidePath } from "./manifest.mjs";
 import { restoreCheckpoint } from "./checkpoint.mjs";
 import { zipDirectory } from "./zip.mjs";
-import { checkHealth, CLAUDE_BIN, GH_BIN } from "./health.mjs";
+import { checkHealth, resolveClaude, GH_BIN } from "./health.mjs";
 import { explainFailure, minutesLeft, typicalRunMinutes, fmtMinutes } from "./insights.mjs";
 import { parseDirectives, visibleDraft } from "./directives.mjs";
 import { createStreamParser } from "./stream.mjs";
@@ -155,7 +155,8 @@ function askManager(text, sessionId) {
     let err = "";
     let child;
     try {
-      child = spawn(CLAUDE_BIN, args, { cwd: ROOT, env, windowsHide: true });
+      const [bin, pre] = resolveClaude();
+      child = spawn(bin, [...pre, ...args], { cwd: ROOT, env, windowsHide: true });
     } catch (e) {
       return resolve({ error: `Couldn't start the Claude CLI (${e.message}).` });
     }

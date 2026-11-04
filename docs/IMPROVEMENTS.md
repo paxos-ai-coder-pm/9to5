@@ -32,7 +32,7 @@ Their journey has seven steps. Today the studio is strong in the middle (describ
 | P2 Phone QR code | ✅ done · ◐ PIN-protected phone web view not done |
 | P2 Tests + CI, top-level error handler, configurable name | ✅ 105 tests (unit, CLI, launcher, projects/apps, integration with a fake `claude`, browser) + GitHub Actions on Linux/macOS/Windows |
 
-Still open: a real end-to-end run with Claude to tune the new agent instructions; starting an npm-installed `claude.cmd` on Windows (the office currently needs the Windows installer's `claude.exe`); a desktop wrapper / `npx devstudio`; hosting for apps that need a server; a sandboxed mode for untrusted work.
+Still open: a real end-to-end run with Claude to tune the new agent instructions; a desktop wrapper / `npx devstudio`; hosting for apps that need a server; a sandboxed mode for untrusted work.
 
 ---
 
