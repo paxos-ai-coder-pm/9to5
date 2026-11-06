@@ -39,8 +39,8 @@ test("settings: defaults, validation and the projects-folder override", () => {
   assert.throws(() => settings.updateSettings({ studioName: "" }), /1–40/);
   assert.throws(() => settings.updateSettings({ studioName: "<script>" }), /1–40/);
   assert.throws(() => settings.updateSettings({ projectsDir: "relative/dir" }), /full folder path/);
-  assert.throws(() => settings.updateSettings({ projectsDir: s.root }), /inside the Dev Studio/);
-  assert.throws(() => settings.updateSettings({ projectsDir: path.join(s.root, "not-yet", "made") }), /inside the Dev Studio/);
+  assert.throws(() => settings.updateSettings({ projectsDir: s.root }), /inside 9to5/);
+  assert.throws(() => settings.updateSettings({ projectsDir: path.join(s.root, "not-yet", "made") }), /inside 9to5/);
   const next = settings.updateSettings({ studioName: "  Priya's   Studio ", lightTeam: 1 });
   assert.equal(next.studioName, "Priya's Studio");
   assert.equal(next.lightTeam, true);

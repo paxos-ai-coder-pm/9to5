@@ -217,7 +217,7 @@ export function startRun({ project, task, allowGithub = false, size = "standard"
   const { skipped } = prepareProject(p, { lightTeam });
   const id = new Date().toISOString().replace(/[:.]/g, "-");
   // snapshot the files so this run can be undone (skipped for a brand-new, empty folder — nothing to go back to)
-  const checkpoint = p.isNew ? null : createCheckpoint(p.dir, id, `Dev Studio: before "${task.split("\n")[0].slice(0, 80)}"`);
+  const checkpoint = p.isNew ? null : createCheckpoint(p.dir, id, `9to5: before "${task.split("\n")[0].slice(0, 80)}"`);
 
   const tCmd = p.dir === ROOT ? "node tools/team-office/team.mjs" : T_CMD;
   const prompt =

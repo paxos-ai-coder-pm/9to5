@@ -8,7 +8,7 @@ import { DIR, ROOT } from "./lib.mjs";
 const FILE = path.join(DIR, "settings.json");
 
 export const DEFAULTS = Object.freeze({
-  studioName: "Vikrant's Dev Studio",
+  studioName: "9to5",
   projectsDir: "", // empty = the default folder below
   lightTeam: false, // every teammate on Sonnet (uses less of the Claude plan)
   hiddenProjects: [], // project folders removed from "My Projects" (files are kept)
@@ -64,7 +64,7 @@ export function updateSettings(patch = {}) {
       if (dir === path.parse(dir).root) throw new Error("Pick a folder, not a whole drive.");
       const real = realPath(dir);
       const root = realPath(ROOT);
-      if (real === root || real.startsWith(root + path.sep)) throw new Error("Projects can't live inside the Dev Studio's own folder.");
+      if (real === root || real.startsWith(root + path.sep)) throw new Error("Projects can't live inside 9to5's own folder.");
       try {
         fs.mkdirSync(dir, { recursive: true });
         fs.accessSync(dir, fs.constants.W_OK);

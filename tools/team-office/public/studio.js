@@ -22,7 +22,7 @@ export function createStudio({ chat, setup }) {
   let lastAskT = 0;
   let lastRunKey = "";
   let renderedAskKey = "";
-  let studioName = "Vikrant's Dev Studio";
+  let studioName = "9to5";
 
   // ---------- plain-English status ----------
   function headline(s) {

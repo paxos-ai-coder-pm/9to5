@@ -79,11 +79,13 @@ export function fmtDur(ms) {
   return `${m}:${String(s % 60).padStart(2, "0")}`;
 }
 
-// The letters on the logo tile: the studio name's initials ("Vikrant's Dev Studio" → "VDS"), shared with the launch page
+// The letters on the logo tile, shared with the launch page: a one-word name is shown itself ("9to5" → "9TO5"), a longer
+// one by its initials ("Vikrant's Dev Studio" → "VDS"; "Vikrant's" is one word, not "Vikrant" + "s"). At most four.
 export function getInitials(name) {
-  // the first letter of each word — "Vikrant's" is one word, not "Vikrant" + "s"
-  const letters = String(name || "").split(/\s+/).map((w) => w.match(/[A-Za-z]/)?.[0]).filter(Boolean);
-  return letters.length >= 2 ? letters.slice(0, 4).join("").toUpperCase() : "VDS";
+  const words = String(name || "").split(/\s+/).filter(Boolean);
+  if (words.length === 1) return words[0].replace(/[^A-Za-z0-9]/g, "").slice(0, 4).toUpperCase() || "9TO5";
+  const letters = words.map((w) => w.match(/[A-Za-z0-9]/)?.[0]).filter(Boolean);
+  return letters.length >= 2 ? letters.slice(0, 4).join("").toUpperCase() : "9TO5";
 }
 
 export function esc(s) {

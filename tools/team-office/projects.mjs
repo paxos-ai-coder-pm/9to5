@@ -35,7 +35,7 @@ export function knownProjects() {
 }
 
 /**
- * "." / this repo's folder name → the Dev Studio itself; a known project's name → its folder; anything else → a new
+ * "." / this repo's folder name → 9to5 itself; a known project's name → its folder; anything else → a new
  * folder in the projects folder. `foreign` = the folder already has files the studio didn't create.
  */
 export function resolveProject(name) {

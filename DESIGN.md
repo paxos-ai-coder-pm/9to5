@@ -1,5 +1,5 @@
 ---
-name: Vikrant's Dev Studio
+name: 9to5
 description: A software team you can talk to, kept as a workshop's commission book in sage and black.
 colors:
   sage: "#9cb29e"
@@ -243,7 +243,7 @@ components:
     height: "36px"
 ---
 
-# Design System: Vikrant's Dev Studio
+# Design System: 9to5
 
 ## Overview
 

@@ -44,7 +44,7 @@ function chunks(text, max = 3800) {
   return out;
 }
 
-export function createTelegram({ onText, onAnswer, onRunAction, statusText, studioName = () => "Dev Studio", log = console.log }) {
+export function createTelegram({ onText, onAnswer, onRunAction, statusText, studioName = () => "9to5", log = console.log }) {
   let cfg = load();
   let polling = false;
   let generation = 0; // bumps on disconnect/setup so an old poll loop stops
@@ -129,7 +129,7 @@ export function createTelegram({ onText, onAnswer, onRunAction, statusText, stud
     const old = cfg;
     cfg = {};
     save();
-    if (hadChat) call("sendMessage", { chat_id: hadChat, text: "🔌 Disconnected from the Dev Studio. Pair again from the office to reconnect." }, old.token).catch(() => {});
+    if (hadChat) call("sendMessage", { chat_id: hadChat, text: "🔌 Disconnected from 9to5. Pair again from the office to reconnect." }, old.token).catch(() => {});
     return status();
   }
 
@@ -201,7 +201,7 @@ export function createTelegram({ onText, onAnswer, onRunAction, statusText, stud
         await sendText(`✅ Paired with ${studioName()}, ${cfg.chatName}!`);
         return help();
       }
-      return call("sendMessage", { chat_id: m.chat.id, text: "🔒 This bot is private. Pair it from the Dev Studio office (📱 Phone button)." });
+      return call("sendMessage", { chat_id: m.chat.id, text: "🔒 This bot is private. Pair it from 9to5 office (📱 Phone button)." });
     }
     if (m.chat.id !== cfg.chatId) return call("sendMessage", { chat_id: m.chat.id, text: "🔒 This bot is private." });
     if (!text) return sendText("I can only read text messages for now.");

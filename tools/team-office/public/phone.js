@@ -55,7 +55,7 @@ export function createPhone() {
         <p>Chat with your manager from anywhere using <b>Telegram</b> (free). Your PC connects out to Telegram, so there's nothing to open on your router. Only your own Telegram account will be able to use the bot.</p>
         <ol class="m-steps">
           <li>Install <b>Telegram</b> on your phone and sign in.</li>
-          <li>In Telegram, open <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> and send <code>/newbot</code>. Give it any name, e.g. <i>My Dev Studio</i>, and a username ending in <code>bot</code>.</li>
+          <li>In Telegram, open <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> and send <code>/newbot</code>. Give it any name, e.g. <i>My 9to5</i>, and a username ending in <code>bot</code>.</li>
           <li>BotFather replies with a <b>token</b> like <code>123456789:AAH…</code>. Copy it and paste it here:</li>
         </ol>
         <form class="m-form" id="tokenForm">

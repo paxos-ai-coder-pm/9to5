@@ -23,7 +23,7 @@ An 8-agent Claude Code team working through a visible pipeline: an architect pla
 
 ## Operating Context
 
-- Runs locally at `http://localhost:4400`, started with `bin/devstudio` (Windows `bin\devstudio.cmd`, Mac `bin/Dev Studio.command`). Needs Node.js 20+ and Claude Code signed in; Git enables Undo, GitHub enables publishing.
+- Runs locally at `http://localhost:4400`, started with `bin/devstudio` (Windows `bin\devstudio.cmd`, Mac `bin/9to5.command`). Needs Node.js 20+ and Claude Code signed in; Git enables Undo, GitHub enables publishing.
 - Uses the owner's Claude plan: a run pauses at the usage limit and continues by itself after the reset.
 - Two views: **Simple** (default — the office, the chat with Maya, My Projects, and the idea/"Right now" card) and **Behind the scenes** (task plan, timeline, activity log, team models, past runs, lessons).
 - Projects are saved in `~/DevStudioProjects` by default (changeable in Settings). One run at a time; further requests queue.
@@ -47,7 +47,7 @@ Binding, confirmed by the owner:
 - **The colour palette: two colours, sage `#9cb29e` and black `#000000`** (with their tints and shades), in both a light and a dark theme that follow the computer's setting. One red is allowed, reserved for errors and blocked work. The teammates keep their own colours inside the office. (Replaces the earlier cream / peach / olive / forest palette.)
 - **Plain words, no jargon** in every label and message; technical detail belongs in Behind the scenes.
 
-The studio's name, "Vikrant's Dev Studio", is the default and can be renamed in Settings; the logo's letters follow the name.
+The studio's name, "9to5", is the default and can be renamed in Settings; the logo's letters follow the name.
 
 ## Evidence on Hand
 

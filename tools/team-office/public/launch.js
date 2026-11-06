@@ -54,7 +54,7 @@ async function poll() {
   try {
     info = await (await fetch(`/api/apps?id=${encodeURIComponent(id)}`, { cache: "no-store" })).json();
   } catch {
-    return show({ title: "CAN'T REACH THE STUDIO", status: "The Dev Studio isn't running on this computer any more." });
+    return show({ title: "CAN'T REACH THE STUDIO", status: "9to5 isn't running on this computer any more." });
   }
   if (info.error) return show({ title: "NOT FOUND", status: esc(info.error) });
   name = info.project.name;

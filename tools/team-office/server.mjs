@@ -130,7 +130,7 @@ function runSnapshot() {
         ? `The user already answered the team's question ("${ask.text.slice(0, 200)}") — the team will pick it up at its next inbox check.`
         : `The team is WAITING for the user's answer (${ask.agent} asks: "${ask.text.slice(0, 400)}"${ask.options ? `; answer buttons: ${ask.options.join(" / ")}` : ""}). Point the user to the question box at the top of the page and its buttons, or if they answer you in chat, RELAY it.`;
     })(),
-    `The Dev Studio itself (project name "."): ${ROOT} — only for changes to the studio/office, when the user explicitly asks for that.`,
+    `9to5 itself (project name "."): ${ROOT} — only for changes to the studio/office, when the user explicitly asks for that.`,
     `Projects folder: ${projectsRoot()} — a new project is created there as <name>/.`,
     `Existing projects (use these exact names for changes to them): ${projects.map((p) => p.name).join(", ") || "(none yet)"}`,
     `Team: ${lightTeam ? "LIGHT team (every teammate on Sonnet — uses less of the Claude plan)" : "normal team (architect and reviewer on Opus)"}.`,
@@ -778,7 +778,7 @@ const server = http
   });
 server.on("error", (e) => {
   if (e.code !== "EADDRINUSE") throw e;
-  console.error(`Port ${PORT} is already in use. Start the Dev Studio with bin/devstudio (Windows: bin\\devstudio.cmd) — it opens the office if it's already running, replaces an older version, and says if another program has the port.\n(Or start it on another port: node tools/team-office/server.mjs <port>)`);
+  console.error(`Port ${PORT} is already in use. Start 9to5 with bin/devstudio (Windows: bin\\devstudio.cmd) — it opens the office if it's already running, replaces an older version, and says if another program has the port.\n(Or start it on another port: node tools/team-office/server.mjs <port>)`);
   process.exit(1);
 });
 process.on("exit", () => {

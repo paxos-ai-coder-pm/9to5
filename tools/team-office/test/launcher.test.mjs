@@ -59,7 +59,7 @@ async function studio() {
   return t;
 }
 
-// a stand-in program on the port: `state` answers /api/state (an older Dev Studio), `ping` answers /api/ping
+// a stand-in program on the port: `state` answers /api/state (an older 9to5), `ping` answers /api/ping
 async function fakeOn(port, { state, ping } = {}) {
   const code = `
     const [port, state, ping] = process.argv.slice(1);
@@ -85,10 +85,10 @@ test("start: the office starts in the background and answers; starting again doe
   const t = await studio();
   const r = t.launch("start");
   assert.equal(r.code, 0, r.out);
-  assert.match(r.out, /Dev Studio is ready at http:\/\/localhost:\d+/);
+  assert.match(r.out, /9to5 is ready at http:\/\/localhost:\d+/);
   const first = await t.ping();
   assert.equal(first.app, "devstudio");
-  assert.match(t.launch("status").out, /Dev Studio is running/);
+  assert.match(t.launch("status").out, /9to5 is running/);
   assert.equal(t.launch("start").code, 0);
   assert.equal((await t.ping()).pid, first.pid, "same office");
 });
@@ -118,10 +118,10 @@ test("an out-of-date office in the middle of a run is left alone", async () => {
   assert.equal(fake.exitCode, null, "still running");
 });
 
-test("an older Dev Studio (from before the launcher could ping it) is stopped and replaced", async () => {
+test("an older 9to5 (from before the launcher could ping it) is stopped and replaced", async () => {
   const t = await studio();
   const old = await fakeOn(t.port, { state: { configuredModels: {}, run: null } });
-  assert.match(t.launch("status").out, /An older version of the Dev Studio is running/);
+  assert.match(t.launch("status").out, /An older version of 9to5 is running/);
   const r = t.launch("start");
   assert.equal(r.code, 0, r.out);
   assert.match(r.out, /Stopped the older version/);
@@ -129,7 +129,7 @@ test("an older Dev Studio (from before the launcher could ping it) is stopped an
   assert.equal((await t.ping()).app, "devstudio");
 });
 
-test("an older Dev Studio that's running a team is left alone", async () => {
+test("an older 9to5 that's running a team is left alone", async () => {
   const t = await studio();
   const old = await fakeOn(t.port, { state: { configuredModels: {}, run: { status: "running" } } });
   const r = t.launch("start");
@@ -154,7 +154,7 @@ test("stop stops the office", async () => {
   const t = await studio();
   t.launch("start");
   const { pid } = await t.ping();
-  assert.match(t.launch("stop").out, /Dev Studio stopped/);
+  assert.match(t.launch("stop").out, /9to5 stopped/);
   assert.equal(await t.ping(), null);
   await until(() => !alive(pid), 5000, "office process gone");
   assert.match(t.launch("status").out, /not running/);

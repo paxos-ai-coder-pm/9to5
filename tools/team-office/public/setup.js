@@ -84,17 +84,23 @@ export function createSetup({ onSettings } = {}) {
     }).join("");
   }
 
+  // Opens at once with what is already known (a key pressed right after the click — Escape — must reach the dialog),
+  // then fills in fresh values, unless you have already started changing them.
+  let edited = false;
+  $("settingsForm").addEventListener("input", () => (edited = true));
   async function openSettings() {
     $("settingsError").hidden = true;
+    edited = false;
+    fill();
+    dialog.open();
     const [sRes, stRes] = await Promise.allSettled([
       fetch("/api/settings", { cache: "no-store" }).then((r) => r.json()),
       fetch("/api/state", { cache: "no-store" }).then((r) => r.json()),
     ]);
     if (sRes.status === "fulfilled") settings = sRes.value;
     if (stRes.status === "fulfilled") renderModels(stRes.value.configuredModels, stRes.value.models);
-    fill();
+    if (dialog.isOpen() && !edited) fill();
     load();
-    dialog.open();
   }
   $("settingsBtn").onclick = openSettings;
   $("settingsClose").onclick = () => dialog.close();

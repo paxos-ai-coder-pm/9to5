@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// The Dev Studio launcher — bin/devstudio (macOS/Linux), bin\devstudio.cmd (Windows) and the double-click files run this.
+// 9to5 launcher — bin/devstudio (macOS/Linux), bin\devstudio.cmd (Windows) and the double-click files run this.
 //   start (default)  start the office and open it in the browser. An office started before an update is restarted
-//                    with the new code (unless the team is in the middle of a run); an older Dev Studio that still
+//                    with the new code (unless the team is in the middle of a run); an older 9to5 that still
 //                    holds the port is stopped and replaced.
 //   update           get the latest version from GitHub (git), then start / restart the office
 //   stop             stop the office (and any run it is doing)
@@ -42,7 +42,7 @@ const ping = async () => {
   const j = await getJson("/api/ping");
   return j?.app === "devstudio" ? j : null;
 };
-/** Dev Studio versions from before /api/ping still answer /api/state the old way. */
+/** 9to5 versions from before /api/ping still answer /api/state the old way. */
 const olderOffice = async () => {
   const s = await getJson("/api/state");
   return s && typeof s === "object" && "configuredModels" in s ? s : null;
@@ -90,7 +90,7 @@ function spawnOffice() {
   fs.mkdirSync(path.dirname(LOG), { recursive: true });
   if (win) {
     // in its own minimized window: closing that window also stops the office
-    const line = `start "Dev Studio server" /min "${process.execPath}" "${SERVER}" ${PORT}`;
+    const line = `start "9to5 server" /min "${process.execPath}" "${SERVER}" ${PORT}`;
     spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", `"${line}"`], { cwd: STUDIO, windowsVerbatimArguments: true, windowsHide: true, detached: true, stdio: "ignore" }).unref();
   } else {
     const out = fs.openSync(LOG, "a");
@@ -99,7 +99,7 @@ function spawnOffice() {
 }
 
 function openBrowser() {
-  say(`Dev Studio is ready at ${URL_}`);
+  say(`9to5 is ready at ${URL_}`);
   if (process.env.DEVSTUDIO_NO_BROWSER) return;
   const [bin, args] = process.platform === "darwin" ? ["open", [URL_]] : win ? ["cmd", ["/c", "start", "", URL_]] : ["xdg-open", [URL_]];
   try {
@@ -118,34 +118,34 @@ async function start() {
     const busy = office.busy ?? (await getJson("/api/state"))?.run?.status === "running";
     if (busy) {
       say("The office is running an older version, but the team is in the middle of something, so it keeps going for now.");
-      say(`To switch to the new version once the team is done: ${win ? "devstudio stop" : "bin/devstudio stop"}, then start the Dev Studio again.`);
+      say(`To switch to the new version once the team is done: ${win ? "devstudio stop" : "bin/devstudio stop"}, then start 9to5 again.`);
       return openBrowser();
     }
     say("The office was started before the last update — restarting it with the new version…");
-    if (!(await stopPid(office.pid))) return fail("Couldn't stop the running office. Restart your computer, then start the Dev Studio again.");
+    if (!(await stopPid(office.pid))) return fail("Couldn't stop the running office. Restart your computer, then start 9to5 again.");
     office = null;
   } else if (!office && (await portBusy())) {
     const old = await olderOffice();
     if (!old)
       return fail(
-        `Another program is using port ${PORT}, so the Dev Studio can't start there.\n` +
+        `Another program is using port ${PORT}, so 9to5 can't start there.\n` +
           `Close that program, or start the studio on another port: ${win ? `set DEVSTUDIO_PORT=4401 && devstudio` : `DEVSTUDIO_PORT=4401 bin/devstudio`}`,
       );
     if (old.run?.status === "running") {
-      say("An older version of the Dev Studio is running, and its team is in the middle of something — leaving it running for now.");
-      say("Once the team is done, close the older office (or restart your computer), then start the Dev Studio again.");
+      say("An older version of 9to5 is running, and its team is in the middle of something — leaving it running for now.");
+      say("Once the team is done, close the older office (or restart your computer), then start 9to5 again.");
       return openBrowser();
     }
     const pid = listenerPid();
     if (!pid || !(await stopPid(pid)))
       return fail(
-        `An older version of the Dev Studio is still running on port ${PORT} and couldn't be stopped automatically.\n` +
-          "Close the window it runs in (or restart your computer), then start the Dev Studio again.",
+        `An older version of 9to5 is still running on port ${PORT} and couldn't be stopped automatically.\n` +
+          "Close the window it runs in (or restart your computer), then start 9to5 again.",
       );
-    say("Stopped the older version of the Dev Studio.");
+    say("Stopped the older version of 9to5.");
   }
   if (!office) {
-    say(`Starting the Dev Studio at ${URL_} …`);
+    say(`Starting 9to5 at ${URL_} …`);
     spawnOffice();
     for (let i = 0; i < 80 && !(office = await ping()); i++) await sleep(250);
     if (!office) {
@@ -153,7 +153,7 @@ async function start() {
       try {
         tail = fs.readFileSync(LOG, "utf8").trim().split("\n").slice(-15).join("\n");
       } catch {}
-      return fail(`The Dev Studio didn't start.${win ? ' The "Dev Studio server" window says why.' : tail ? `\nThe last lines of its log (${LOG}):\n${tail}` : ""}`);
+      return fail(`9to5 didn't start.${win ? ' The "9to5 server" window says why.' : tail ? `\nThe last lines of its log (${LOG}):\n${tail}` : ""}`);
     }
   }
   openBrowser();
@@ -163,18 +163,18 @@ async function start() {
 async function stop() {
   const office = await ping();
   const pid = office?.pid || ((await portBusy()) && (await olderOffice()) ? listenerPid() : null);
-  if (!pid) return say("Dev Studio is not running.");
-  if (await stopPid(pid)) say("Dev Studio stopped.");
-  else fail("Couldn't stop the Dev Studio. Restart your computer to be sure it's closed.");
+  if (!pid) return say("9to5 is not running.");
+  if (await stopPid(pid)) say("9to5 stopped.");
+  else fail("Couldn't stop 9to5. Restart your computer to be sure it's closed.");
 }
 
 async function status() {
   const office = await ping();
   if (office) {
     const stale = office.version !== codeVersion();
-    say(`Dev Studio is running at ${URL_} (pid ${office.pid}).${stale ? " It was started before the last update — start the Dev Studio again to switch to the new version." : ""}`);
-  } else if ((await portBusy()) && (await olderOffice())) say(`An older version of the Dev Studio is running at ${URL_}. Start the Dev Studio to replace it with the new version.`);
-  else say("Dev Studio is not running.");
+    say(`9to5 is running at ${URL_} (pid ${office.pid}).${stale ? " It was started before the last update — start 9to5 again to switch to the new version." : ""}`);
+  } else if ((await portBusy()) && (await olderOffice())) say(`An older version of 9to5 is running at ${URL_}. Start 9to5 to replace it with the new version.`);
+  else say("9to5 is not running.");
 }
 
 // ---------- update ----------
@@ -182,10 +182,10 @@ async function update() {
   const git = (...args) => run("git", ["-C", STUDIO, ...args]);
   const out = (r) => (r.stdout || "").trim();
   if (out(git("rev-parse", "--is-inside-work-tree")) !== "true")
-    return fail("This copy of the Dev Studio wasn't downloaded with git, so it can't update itself.\nDownload the latest version from GitHub and start it from there.");
+    return fail("This copy of 9to5 wasn't downloaded with git, so it can't update itself.\nDownload the latest version from GitHub and start it from there.");
   // only the studio's own files count: run state and settings are ignored by git, projects live elsewhere
   if (out(git("status", "--porcelain", "--untracked-files=no")))
-    return fail(`Some of the Dev Studio's own files were changed on this computer, so nothing was updated (and nothing was lost).\nTo see what changed: git -C "${STUDIO}" status`);
+    return fail(`Some of 9to5's own files were changed on this computer, so nothing was updated (and nothing was lost).\nTo see what changed: git -C "${STUDIO}" status`);
   say("Getting the latest version…");
   const fetched = git("fetch", "origin");
   if (fetched.status !== 0) return fail(`Couldn't get the latest version from GitHub:\n${(fetched.stderr || "").trim()}`);
@@ -202,7 +202,7 @@ async function update() {
 }
 
 if (Number(process.versions.node.split(".")[0]) < 20) {
-  fail(`The Dev Studio needs Node.js 20 or newer (this computer has ${process.version}). Get it from https://nodejs.org`);
+  fail(`9to5 needs Node.js 20 or newer (this computer has ${process.version}). Get it from https://nodejs.org`);
 } else {
   const cmd = process.argv[2] || "start";
   const commands = { start, stop, status, update };
