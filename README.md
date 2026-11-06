@@ -1,4 +1,4 @@
-# Vikrant's Dev Studio
+# 9to5
 
 A software team you can talk to. Tell the manager what you'd like in plain words — *"a monthly budget tracker for my household"* — approve the plan with one click, watch the team build it in an 8-bit pixel office, then press **▶ Open** to use it. No coding needed.
 
@@ -21,12 +21,12 @@ You need two things on your computer:
 Then start the studio:
 
 - **Windows:** double-click `bin\devstudio.cmd`.
-- **Mac:** double-click `bin/Dev Studio.command` (the first time: right-click → Open).
+- **Mac:** double-click `bin/9to5.command` (the first time: right-click → Open).
 - **Linux / from a terminal:** `bin/devstudio` (also `devstudio update`, `devstudio stop` and `devstudio status`).
 
 Your browser opens the office at http://localhost:4400.
 
-**Getting the latest version:** double-click `bin\Update Dev Studio.cmd` (Windows) or `bin/Update Dev Studio.command` (Mac), or run `bin/devstudio update`. It downloads the new version from GitHub and restarts the office (if you cloned the studio with git). Starting the studio also replaces an office that's still running an older version — unless the team is in the middle of something. If anything is missing, a **setup checklist** at the top says exactly what to do (with a Copy button for any command). Git and GitHub are optional — Git enables **Undo**, GitHub enables publishing.
+**Getting the latest version:** double-click `bin\Update 9to5.cmd` (Windows) or `bin/Update 9to5.command` (Mac), or run `bin/devstudio update`. It downloads the new version from GitHub and restarts the office (if you cloned the studio with git). Starting the studio also replaces an office that's still running an older version — unless the team is in the middle of something. If anything is missing, a **setup checklist** at the top says exactly what to do (with a Copy button for any command). Git and GitHub are optional — Git enables **Undo**, GitHub enables publishing.
 
 ## Using it
 
@@ -107,7 +107,7 @@ A small, focused library instead of dozens of agents: `.claude/playbooks/`.
 
 The office calls the `claude` CLI (`claude -p --agent manager` for the chat, `claude -p "/team …"` for runs), so it must be installed and signed in for the environment the server runs in; set `CLAUDE_BIN` to point at a specific binary. It strips stale non-Claude model overrides from its environment when talking to Anthropic. `DEVSTUDIO_PROJECTS` overrides the projects folder; `DEVSTUDIO_PORT` the launcher's port; `DEVSTUDIO_CHROME` the browser used for project pictures (set it empty for no pictures).
 
-**Upgrading from an older version:** run `git pull` once, then start the studio as above — the launcher stops the older office that may still be running and starts the new one (from then on, *Update Dev Studio* does both). New projects now go to `~/DevStudioProjects` instead of next to this repo. Projects you already built keep working from their old folders (they're found through the run history). To keep creating projects next to this repo, set **⚙ Settings → Where projects are saved** to this repo's parent folder.
+**Upgrading from an older version:** run `git pull` once, then start the studio as above — the launcher stops the older office that may still be running and starts the new one (from then on, *Update 9to5* does both). New projects now go to `~/DevStudioProjects` instead of next to this repo. Projects you already built keep working from their old folders (they're found through the run history). To keep creating projects next to this repo, set **⚙ Settings → Where projects are saved** to this repo's parent folder.
 
 ## Progress CLI
 

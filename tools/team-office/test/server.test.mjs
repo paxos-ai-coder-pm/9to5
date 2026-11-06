@@ -501,7 +501,7 @@ describe("settings", opts, () => {
   test("name, light team and projects folder", async () => {
     const t = await setup({ lead: "finish" }, { DEVSTUDIO_PROJECTS: "" });
     const s0 = (await t.srv.api("/api/settings")).json;
-    assert.equal(s0.studioName, "Vikrant's Dev Studio");
+    assert.equal(s0.studioName, "9to5");
     const bad = await t.srv.api("/api/settings", { method: "POST", body: { studioName: "" } });
     assert.equal(bad.status, 400);
     assert.match(bad.json.error, /1–40/);

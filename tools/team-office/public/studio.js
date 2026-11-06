@@ -1,6 +1,6 @@
 // Friendly layer on top of the office: plain-English status, "needs your answer" banner, welcome card,
 // projects/lessons tabs, help tips, and optional desktop notifications.
-import { AGENT_BY_ID, STEPS, stepIndex, displayName, esc, fmtDur } from "./agents.js";
+import { AGENT_BY_ID, STEPS, stepIndex, displayName, esc, fmtDur, getInitials } from "./agents.js";
 import { isSimple } from "./ui.js";
 
 const PHASE_TEXT = {
@@ -22,23 +22,23 @@ export function createStudio({ chat, setup }) {
   let lastAskT = 0;
   let lastRunKey = "";
   let renderedAskKey = "";
-  let studioName = "Vikrant's Dev Studio";
+  let studioName = "9to5";
 
   // ---------- plain-English status ----------
   function headline(s) {
     const run = s.run;
-    if (mode === "demo") return "🎮 Demo run — this is what a real run looks like";
-    if (s.ask && !s.ask.answered) return `❓ ${who(s.ask.agent)} needs your answer — see the yellow box below`;
-    if (s.ask?.answered && run?.status === "running") return "✓ Answer sent — the team is picking it up";
-    if (run?.status === "needs-answer") return "⏸ The team paused until you answer its question — nothing is built yet";
+    if (mode === "demo") return "Demo run";
+    if (s.ask && !s.ask.answered) return `${who(s.ask.agent)} needs your answer`;
+    if (s.ask?.answered && run?.status === "running") return "Answer sent — the team is picking it up";
+    if (run?.status === "needs-answer") return "The team paused until you answer its question — nothing is built yet";
     if (run?.status === "waiting") {
       const at = new Date(run.resumeAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-      return `⏳ Paused by the Claude usage limit — the team continues by itself at ${at}`;
+      return `Paused by the Claude usage limit — the team continues by itself at ${at}`;
     }
     // an office-launched run knows whether it's really running; without one (a /team run in Claude Code) trust the board
     const boardActive = !!s.task && s.phase && s.phase !== "done" && s.phase !== "idle";
     if (run ? run.status === "running" : boardActive) {
-      if (!s.task) return "🚀 Starting up — the team lead is getting ready";
+      if (!s.task) return "Starting up — the team lead is getting ready";
       const tasks = s.tasks || [];
       const done = tasks.filter((t) => t.status === "done").length;
       if (isSimple()) {
@@ -52,11 +52,15 @@ export function createStudio({ chat, setup }) {
       const base = s.phase === "build" ? `Building — ${done} of ${tasks.length} tasks done` : PHASE_TEXT[s.phase] || "Working";
       return working.length ? `${base} · ${working.slice(0, 2).join(" · ")}` : base;
     }
-    if (run?.status === "needs-answer") return "⏸ The team paused until you answer its question";
-    if (run?.status === "finished" && Date.now() - (run.endedAt || 0) < 6 * 3600e3) return `✅ Finished: ${run.project} — press ▶ Open to try it`;
-    if (["failed", "interrupted"].includes(run?.status) && Date.now() - (run.endedAt || 0) < 6 * 3600e3) return `⚠ The last run didn't finish — you can continue it or ask the manager what happened`;
-    if (setup?.ready() === false) return "⚙ Almost ready — finish the setup below, then tell the manager what to build";
-    return "Ready — tell the manager what to build";
+    if (run?.status === "needs-answer") return "The team paused until you answer its question";
+    if (run?.status === "finished" && Date.now() - (run.endedAt || 0) < 6 * 3600e3) {
+      // the app's own name (registered by `T deliver` in this run), like the Right now card — not its folder name
+      const name = s.delivered && s.delivered.t >= run.startedAt ? s.delivered.name : run.project;
+      return `Finished: ${name} — press Open to try it`;
+    }
+    if (["failed", "interrupted"].includes(run?.status) && Date.now() - (run.endedAt || 0) < 6 * 3600e3) return `The last run didn't finish — you can continue it or ask the manager what happened`;
+    if (setup?.ready() === false) return "Almost ready. Finish setup below.";
+    return "Ready for your next idea";
   }
 
   // ---------- needs your answer ----------
@@ -75,10 +79,10 @@ export function createStudio({ chat, setup }) {
     $("askBanner").classList.toggle("answered", !!ask.answered);
     const options = ask.options?.length ? ask.options : null;
     $("askActions").innerHTML = ask.answered
-      ? `<span class="ask-sent">✓ Answer sent — waiting for the team</span>`
+      ? `<span class="ask-sent">Answer sent — waiting for the team</span>`
       : (options
           ? options.map((o, i) => `<button type="button" class="px-btn" data-option="${i}">${esc(o)}</button>`).join("")
-          : `<button type="button" class="px-btn" data-option="approve">✓ APPROVE</button>`) + `<button type="button" class="px-btn ghost" data-option="reply">✎ REPLY</button>`;
+          : `<button type="button" class="px-btn" data-option="approve">Approve</button>`) + `<button type="button" class="px-btn ghost" data-option="reply"><svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg> Reply</button>`;
     for (const b of $("askActions").querySelectorAll("[data-option]"))
       b.onclick = () => (b.dataset.option === "reply" ? chat.replyTo(ask) : answer(b.dataset.option === "approve" ? "Approved - go ahead." : options[Number(b.dataset.option)]));
   }
@@ -100,10 +104,9 @@ export function createStudio({ chat, setup }) {
   $("welcomeClose").onclick = () => {
     localStorage.setItem("welcomeDismissed", "1");
     $("welcome").hidden = true;
+    const idea = $("startText");
+    (idea?.offsetParent ? idea : $("workspace")).focus();
   };
-  $("examples").addEventListener("click", (e) => {
-    if (e.target.tagName === "BUTTON") chat.prefill(e.target.textContent);
-  });
 
   // ---------- tabs ----------
   const tabs = { tabLog: "log", tabProjects: "projects", tabLessons: "lessons" };
@@ -138,18 +141,17 @@ export function createStudio({ chat, setup }) {
       $("projects").innerHTML = `<li class="empty-note">Nothing built yet. Finished runs show up here with their folder, so you can find and try them.</li>`;
       return;
     }
-    const icon = { finished: "✓", failed: "✖", stopped: "■" };
     $("projects").innerHTML = list
       .map(
         (h) => `<li class="proj ${h.status}">
-          <div class="proj-top"><span class="chip ${h.status === "finished" ? "done" : h.status === "failed" ? "blocked" : "pending"}">${icon[h.status] || "•"}</span>
+          <div class="proj-top"><span class="chip ${h.status === "finished" ? "done" : h.status === "failed" ? "blocked" : "pending"}" aria-hidden="true"></span>
             <b>${esc(h.project)}</b><span class="proj-when">${when(h.endedAt || h.startedAt)} · ${fmtDur((h.endedAt || h.startedAt) - h.startedAt)}${h.attempts > 1 ? ` · ${h.attempts} sessions` : ""}</span></div>
           <div class="proj-title">${esc(h.title)}</div>
           ${h.error ? `<div class="proj-err">${esc(h.error)}</div>` : ""}
           <div class="proj-actions">
-            ${h.dir ? `<button class="px-btn small ghost" data-copy="${esc(h.dir)}">📁 COPY FOLDER PATH</button>` : ""}
-            ${h.status === "finished" ? `<button class="px-btn small ghost" data-ask="How do I try ${esc(h.project)}?">▶ HOW TO TRY</button>` : ""}
-            ${h.status === "failed" ? `<button class="px-btn small ghost" data-ask="What went wrong with the ${esc(h.project)} run, and can the team fix it?">↻ ASK ABOUT IT</button>` : ""}
+            ${h.dir ? `<button class="px-btn small ghost" data-copy="${esc(h.dir)}">Copy folder path</button>` : ""}
+            ${h.status === "finished" ? `<button class="px-btn small ghost" data-ask="How do I try ${esc(h.project)}?">How to try it</button>` : ""}
+            ${h.status === "failed" ? `<button class="px-btn small ghost" data-ask="What went wrong with the ${esc(h.project)} run, and can the team fix it?">Ask about it</button>` : ""}
           </div></li>`,
       )
       .join("");
@@ -168,8 +170,8 @@ export function createStudio({ chat, setup }) {
     if (copy) {
       try {
         await navigator.clipboard.writeText(copy.dataset.copy);
-        copy.textContent = "✓ COPIED";
-        setTimeout(() => (copy.textContent = "📁 COPY FOLDER PATH"), 1500);
+        copy.textContent = "Copied";
+        setTimeout(() => (copy.textContent = "Copy folder path"), 1500);
       } catch {
         prompt("Folder path:", copy.dataset.copy);
       }
@@ -192,23 +194,31 @@ export function createStudio({ chat, setup }) {
 
   // ---------- help tips ----------
   const pop = $("helpPop");
+  let helpButton;
+  function closeHelp() {
+    helpButton?.removeAttribute("aria-describedby");
+    helpButton = null;
+    pop.hidden = true;
+  }
   document.addEventListener("click", (e) => {
     const btn = e.target.closest(".help");
-    if (!btn) return void (pop.hidden = true);
+    if (!btn || btn === helpButton) return closeHelp();
+    closeHelp();
+    helpButton = btn;
     pop.textContent = btn.dataset.help;
     pop.hidden = false;
+    btn.setAttribute("aria-describedby", pop.id);
     const r = btn.getBoundingClientRect();
     pop.style.top = r.bottom + 8 + window.scrollY + "px";
-    pop.style.left = Math.max(8, Math.min(r.right - 300, window.innerWidth - 320)) + window.scrollX + "px";
+    pop.style.left = Math.max(8, Math.min(r.right, document.documentElement.clientWidth - 8) - pop.offsetWidth) + window.scrollX + "px";
   });
-  document.addEventListener("keydown", (e) => e.key === "Escape" && (pop.hidden = true));
+  document.addEventListener("keydown", (e) => e.key === "Escape" && closeHelp());
 
   // ---------- notifications ----------
   const bell = $("notifyBtn");
   const notifyOn = () => localStorage.getItem("notify") === "on" && "Notification" in window && Notification.permission === "granted";
   const paintBell = () => {
     bell.setAttribute("aria-pressed", String(notifyOn()));
-    bell.textContent = notifyOn() ? "🔔" : "🔕";
     bell.title = notifyOn() ? "Notifications on — click to turn off" : "Notify me when the team needs me or finishes";
   };
   bell.onclick = async () => {
@@ -252,10 +262,11 @@ export function createStudio({ chat, setup }) {
       mode = m;
       if (s.studioName && s.studioName !== studioName) {
         studioName = s.studioName;
-        $("studioName").textContent = studioName.toUpperCase();
-        $("welcomeTitle").textContent = `WELCOME TO ${studioName.toUpperCase()}`;
+        $("studioName").textContent = studioName;
+        for (const face of document.querySelectorAll(".logo-abbr")) face.textContent = getInitials(studioName); // the brand mark
       }
-      $("headline").textContent = headline(s);
+      const status = headline(s);
+      if ($("headline").textContent !== status) $("headline").textContent = status;
       renderAsk(s);
       renderWelcome(s);
       if (m === "live") watchForNotifications(s);

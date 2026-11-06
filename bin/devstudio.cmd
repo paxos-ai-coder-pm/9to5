@@ -1,5 +1,5 @@
 @echo off
-rem Dev Studio launcher for Windows. Double-click it, or run: devstudio start, update, stop or status
+rem 9to5 launcher for Windows. Double-click it, or run: devstudio start, update, stop or status
 rem   devstudio          start the office and open it in the browser (an older version still running is replaced)
 rem   devstudio update   get the latest version and restart the office
 rem   devstudio stop     stop the office (and any run it is doing)

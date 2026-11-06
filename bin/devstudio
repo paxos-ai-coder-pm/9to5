@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Dev Studio launcher for macOS and Linux (on Windows, Git Bash hands over to devstudio.cmd).
+# 9to5 launcher for macOS and Linux (on Windows, Git Bash hands over to devstudio.cmd).
 #   devstudio          start the office and open it in the browser (an older version still running is replaced)
 #   devstudio update   get the latest version and restart the office
 #   devstudio stop     stop the office (and any run it is doing)

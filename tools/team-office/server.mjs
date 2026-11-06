@@ -13,14 +13,14 @@ import { spawn, execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { ROOT, DIR, STATE_FILE, CHAT_FILE, readState, readChat, updateChat, updateState, setAgent, setModel, configuredModels, summary, claudeEnv, event, signInHint } from "./lib.mjs";
 import { readRun, readHistory, startRun, stopRun, isRunning, recoverRunState, continueAfterAnswer, continueRun, shutdown } from "./runner.mjs";
-import { resolveProject, knownProjects, portfolio, findProject } from "./projects.mjs";
+import { resolveProject, knownProjects, portfolio, findProject, nextProjectNumber } from "./projects.mjs";
 import { readSettings, updateSettings, projectsRoot, defaultProjectsDir } from "./settings.mjs";
 import { openApp, stopApp, closeApp, appStatus, stopAllApps, showFiles, captureScreenshot, screenshotPath } from "./apps.mjs";
 import { codeVersion } from "./version.mjs";
 import { readManifest, insidePath } from "./manifest.mjs";
 import { restoreCheckpoint } from "./checkpoint.mjs";
 import { zipDirectory } from "./zip.mjs";
-import { checkHealth, CLAUDE_BIN, GH_BIN } from "./health.mjs";
+import { checkHealth, resolveClaude, GH_BIN } from "./health.mjs";
 import { explainFailure, minutesLeft, typicalRunMinutes, fmtMinutes } from "./insights.mjs";
 import { parseDirectives, visibleDraft } from "./directives.mjs";
 import { createStreamParser } from "./stream.mjs";
@@ -128,9 +128,9 @@ function runSnapshot() {
       if (!ask) return "The team has no open question for the user.";
       return ask.answered
         ? `The user already answered the team's question ("${ask.text.slice(0, 200)}") — the team will pick it up at its next inbox check.`
-        : `The team is WAITING for the user's answer (${ask.agent} asks: "${ask.text.slice(0, 400)}"${ask.options ? `; answer buttons: ${ask.options.join(" / ")}` : ""}). Point the user to the yellow banner and its buttons, or if they answer you in chat, RELAY it.`;
+        : `The team is WAITING for the user's answer (${ask.agent} asks: "${ask.text.slice(0, 400)}"${ask.options ? `; answer buttons: ${ask.options.join(" / ")}` : ""}). Point the user to the question box at the top of the page and its buttons, or if they answer you in chat, RELAY it.`;
     })(),
-    `The Dev Studio itself (project name "."): ${ROOT} — only for changes to the studio/office, when the user explicitly asks for that.`,
+    `9to5 itself (project name "."): ${ROOT} — only for changes to the studio/office, when the user explicitly asks for that.`,
     `Projects folder: ${projectsRoot()} — a new project is created there as <name>/.`,
     `Existing projects (use these exact names for changes to them): ${projects.map((p) => p.name).join(", ") || "(none yet)"}`,
     `Team: ${lightTeam ? "LIGHT team (every teammate on Sonnet — uses less of the Claude plan)" : "normal team (architect and reviewer on Opus)"}.`,
@@ -155,7 +155,8 @@ function askManager(text, sessionId) {
     let err = "";
     let child;
     try {
-      child = spawn(CLAUDE_BIN, args, { cwd: ROOT, env, windowsHide: true });
+      const [bin, pre] = resolveClaude();
+      child = spawn(bin, [...pre, ...args], { cwd: ROOT, env, windowsHide: true });
     } catch (e) {
       return resolve({ error: `Couldn't start the Claude CLI (${e.message}).` });
     }
@@ -205,7 +206,7 @@ async function handleChat(text, via) {
     c.busy = true;
     return c.sessionId;
   });
-  updateState((s) => setAgent(s, "manager", "working", "Replying to you"));
+  updateState((s) => setAgent(s, "manager", "working", "Replying to you", { quiet: true }));
 
   draft = "";
   let r = await askManager(text, sessionId);
@@ -255,7 +256,8 @@ async function handleChat(text, via) {
     for (const t of relays) c.inbox.push({ id: crypto.randomUUID(), t: Date.now(), text: t, read: false });
   });
   updateState((s) => {
-    setAgent(s, "manager", "waiting", proposal ? "Waiting for your go-ahead" : relays.length ? `Relayed ${relays.length} note(s) to team` : "Here if you need me");
+    // a plain reply is routine; a proposal or notes relayed to the team belong in the log
+    setAgent(s, "manager", "waiting", proposal ? "Waiting for your go-ahead" : relays.length ? `Relayed ${relays.length} note(s) to team` : "Here if you need me", { quiet: !proposal && !relays.length });
   });
   if (relays.length) continueAfterAnswer(); // a run paused for the user's answer picks it up now
 
@@ -635,7 +637,7 @@ async function handle(req, res) {
     }
   }
 
-  if (route === "/api/portfolio") return send(res, 200, { projects: portfolio({ appStatus, showHidden: url.searchParams.has("hidden") }) });
+  if (route === "/api/portfolio") return send(res, 200, { projects: portfolio({ appStatus, showHidden: url.searchParams.has("hidden") }), nextNo: nextProjectNumber() });
 
   if (route === "/api/apps") {
     const p = findProject(url.searchParams.get("id"));
@@ -776,7 +778,7 @@ const server = http
   });
 server.on("error", (e) => {
   if (e.code !== "EADDRINUSE") throw e;
-  console.error(`Port ${PORT} is already in use. Start the Dev Studio with bin/devstudio (Windows: bin\\devstudio.cmd) — it opens the office if it's already running, replaces an older version, and says if another program has the port.\n(Or start it on another port: node tools/team-office/server.mjs <port>)`);
+  console.error(`Port ${PORT} is already in use. Start 9to5 with bin/devstudio (Windows: bin\\devstudio.cmd) — it opens the office if it's already running, replaces an older version, and says if another program has the port.\n(Or start it on another port: node tools/team-office/server.mjs <port>)`);
   process.exit(1);
 });
 process.on("exit", () => {

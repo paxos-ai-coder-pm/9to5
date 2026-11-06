@@ -3,3 +3,9 @@
 /.claude/settings.local.json
 node_modules/
 tests/scratch/
+# Impeccable: local working files (screenshots, question rounds, caches, this machine's settings, downloaded engine)
+/.impeccable/review/
+/.impeccable/questions/
+/.impeccable/config.local.json
+/.impeccable/hook.cache.json
+/.claude/skills/impeccable/scripts/bin/

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Black Console</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;background:#000;color:#d9e3da;font:400 15px/1.4 Archivo,sans-serif}
+header{height:64px;display:flex;align-items:center;gap:18px;padding:0 28px;border-bottom:1px solid #2a312b}
+.mark{width:34px;height:34px;border:1px solid #9cb29e;color:#9cb29e;display:grid;place-items:center;font:700 12px Archivo}
+.head{font-size:19px;font-weight:600;color:#fff}.last{font-size:13px;color:#8f9d90}
+.sw{margin-left:auto;display:flex;border:1px solid #2a312b}.sw b{padding:7px 14px;font-size:13px;font-weight:500}.sw b.on{background:#1c211d;color:#9cb29e}
+.ic{width:34px;height:34px;border:1px solid #2a312b}
+main{display:grid;grid-template-columns:1.3fr 1fr;grid-template-rows:1.12fr 1fr;height:836px}
+.p{border-right:1px solid #2a312b;border-bottom:1px solid #2a312b;padding:14px 20px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.ph{display:flex;gap:10px;align-items:baseline}.ph h2{font:600 12px Archivo;text-transform:uppercase;letter-spacing:.14em;color:#8f9d90}.ph span{font-size:13px;color:#8f9d90}
+.office{display:flex;gap:20px;flex:1}.screen{width:540px;height:304px;background:#121612;border:1px solid #2a312b;position:relative}.screen i{position:absolute;background:#9cb29e;opacity:.35}
+.who{display:grid;gap:10px;align-content:center;font-size:14px}.who div{display:flex;gap:10px;align-items:center}.face{width:28px;height:28px;background:#1c211d;border:1px solid #2a312b}
+.chat{display:flex;flex-direction:column;border-bottom:1px solid #2a312b}.ch{padding:12px 18px;border-bottom:1px solid #2a312b;display:flex;gap:10px;align-items:center}.ch b{color:#fff}.ch small{margin-left:auto;color:#9cb29e;font-size:12px}
+.log{flex:1;padding:14px 18px;display:flex;flex-direction:column;gap:12px}.them{background:#1c211d;padding:10px 13px;max-width:88%}.me{align-self:flex-end;background:#9cb29e;color:#000;padding:10px 13px}
+.in{display:flex;gap:8px;padding:12px 18px;border-top:1px solid #2a312b}.in div{flex:1;border:1px solid #2a312b;padding:10px;color:#8f9d90}.in b{width:44px;background:#9cb29e}
+.card{border:1px solid #2a312b;padding:12px 14px;display:grid;gap:8px;max-width:420px}.tag{color:#9cb29e;font-size:12px;border:1px solid #9cb29e;padding:1px 8px;justify-self:start}
+.btn{background:#9cb29e;color:#000;padding:8px 14px;font-weight:600;font-size:14px}.ghost{border:1px solid #2a312b;padding:7px 13px;font-size:14px}.row{display:flex;gap:8px}
+.start h3{font:600 36px/1.08 Archivo;color:#fff}.ta{border:1px solid #2a312b;height:76px;padding:10px;color:#8f9d90;font-size:16px;background:#0b0d0b}
+</style></head><body>
+<header><div class="mark">VDS</div><div><div class="head">Ready for your next idea</div><div class="last">Last job: Tic tac toe game: you vs the computer, in your browser</div></div><div class="sw"><b class="on">Simple</b><b>Behind the scenes</b></div><div class="ic"></div><div class="ic"></div><div class="ic"></div></header>
+<main>
+  <section class="p"><div class="ph"><h2>Team office</h2><span>See who's working on your project.</span></div><div class="office"><div class="screen"><i style="left:30px;top:30px;width:110px;height:40px"></i><i style="left:40px;top:150px;width:450px;height:6px"></i><i style="left:40px;top:240px;width:180px;height:40px"></i></div>
+    <div class="who"><div><span class="face"></span>Maya · Manages</div><div><span class="face"></span>Asha · Plans</div><div><span class="face"></span>Ben &amp; Chloe · Build</div><div><span class="face"></span>Diego, Emma &amp; Farid · Test</div><div><span class="face"></span>Grace · Reviews</div></div></div></section>
+  <aside class="chat"><div class="ch"><span class="face"></span><b>Maya</b><span style="color:#8f9d90;font-size:13px">Studio manager</span><small>● Online</small></div><div class="log"><div class="them">The game is built with JavaScript, which is the language web pages use.</div><div class="me">what programming language did you use?</div><div class="them">I can ask Asha to list exactly what's inside if you'd like.</div></div><div class="in"><div>Tell Maya what to build…</div><b></b></div></aside>
+  <section class="p"><div class="ph"><h2>My projects</h2><span>Open or update anything the team has built.</span></div><div class="card"><b style="font-size:19px;color:#fff">Tic Tac Toe</b><span class="tag">Ready</span><div class="row"><span class="btn">▶ Open</span><span class="ghost">✎ Change</span></div></div></section>
+  <section class="p start"><div class="ph"><h2>New project</h2></div><h3>What would you like to build?</h3><div class="ta">For example, a budget tracker with monthly totals…</div><div class="row"><span class="btn">Send to Maya →</span><span class="ghost">▶ Watch demo</span></div></section>
+</main></body></html>

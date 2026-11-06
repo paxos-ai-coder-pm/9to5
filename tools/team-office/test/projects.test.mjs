@@ -39,8 +39,8 @@ test("settings: defaults, validation and the projects-folder override", () => {
   assert.throws(() => settings.updateSettings({ studioName: "" }), /1–40/);
   assert.throws(() => settings.updateSettings({ studioName: "<script>" }), /1–40/);
   assert.throws(() => settings.updateSettings({ projectsDir: "relative/dir" }), /full folder path/);
-  assert.throws(() => settings.updateSettings({ projectsDir: s.root }), /inside the Dev Studio/);
-  assert.throws(() => settings.updateSettings({ projectsDir: path.join(s.root, "not-yet", "made") }), /inside the Dev Studio/);
+  assert.throws(() => settings.updateSettings({ projectsDir: s.root }), /inside 9to5/);
+  assert.throws(() => settings.updateSettings({ projectsDir: path.join(s.root, "not-yet", "made") }), /inside 9to5/);
   const next = settings.updateSettings({ studioName: "  Priya's   Studio ", lightTeam: 1 });
   assert.equal(next.studioName, "Priya's Studio");
   assert.equal(next.lightTeam, true);
@@ -205,7 +205,7 @@ test("apps: a script runs once and its output is kept; extensions just show step
   assert.equal((await apps.openApp(ext)).status, "manual");
 });
 
-test("apps: show files hands the folder to the system file manager", async () => {
+test("apps: show files hands the folder to the system file manager", { skip: isWindows && "needs a POSIX shell" }, async () => {
   const p = makeProject("show-me", { "index.html": "x" });
   assert.deepEqual(await apps.showFiles(p.dir), { ok: true });
   await until(() => fs.existsSync(process.env.FAKE_LOG + ".opener") && fs.readFileSync(process.env.FAKE_LOG + ".opener", "utf8").includes(p.dir), 5000, "opener called");

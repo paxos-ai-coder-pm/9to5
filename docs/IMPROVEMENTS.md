@@ -1,4 +1,4 @@
-# Making Dev Studio work for non-developers
+# Making 9to5 work for non-developers
 
 A review of the whole studio (office UI, server, runner, agents, skill, playbooks) from one point of view: **a normal person who can describe what they want, but has never used a terminal, doesn't know what Next.js or git is, and can't read code.**
 
@@ -21,7 +21,7 @@ Their journey has seven steps. Today the studio is strong in the middle (describ
 | Bug fixes (Stop on macOS/Linux, false "finished", stale inbox, DNS rebinding / crash, Merage Hub alias, Node 18 `crypto` crash) | ✅ done, tested |
 | P0 "Built" → "I can use it": `devstudio.json` + `T deliver`, ▶ Open (static / web on `$PORT` / script / how-to), launch page, 📂 Show files, screenshot, plain report card (`T report`), START-HERE + start files in the playbook | ✅ done, tested (office side); the team's side is instructions — not yet exercised with a real model run |
 | P0 Simple view by default, friendly names, plain steps, "Right now" card, FIX only when it happens, Behind the scenes toggle | ✅ done, tested |
-| P0 Setup checklist, instant "not signed in" answer, macOS/Linux launcher, `Dev Studio.command` | ✅ done, tested · ◐ no desktop-app wrapper or `npx devstudio` yet |
+| P0 Setup checklist, instant "not signed in" answer, macOS/Linux launcher, `9to5.command` | ✅ done, tested · ◐ no desktop-app wrapper or `npx devstudio` yet |
 | P1 Guided brief (CHOICES buttons), plain-language plan approval, `T ask --options` | ✅ done, tested (UI + CLI); the manager/lead wording is instructions |
 | P1 Team sizes, lighter team, `T wait`, time estimates | ✅ done, tested · ◐ lighter team can't change the reviewer/architect model for runs on the studio itself (its agent files are the originals) |
 | P1 Non-developer playbook + agent instructions | ✅ written |
@@ -32,7 +32,7 @@ Their journey has seven steps. Today the studio is strong in the middle (describ
 | P2 Phone QR code | ✅ done · ◐ PIN-protected phone web view not done |
 | P2 Tests + CI, top-level error handler, configurable name | ✅ 105 tests (unit, CLI, launcher, projects/apps, integration with a fake `claude`, browser) + GitHub Actions on Linux/macOS/Windows |
 
-Still open: a real end-to-end run with Claude to tune the new agent instructions; starting an npm-installed `claude.cmd` on Windows (the office currently needs the Windows installer's `claude.exe`); a desktop wrapper / `npx devstudio`; hosting for apps that need a server; a sandboxed mode for untrusted work.
+Still open: a real end-to-end run with Claude to tune the new agent instructions; a desktop wrapper / `npx devstudio`; hosting for apps that need a server; a sandboxed mode for untrusted work.
 
 ---
 
@@ -46,7 +46,7 @@ These were verified bugs (reproduced before the fix, re-tested after with a fake
 | **An unanswered plan counted as "finished".** The lead waits 30 min for approval, then `T phase done` + exit 0 → runner said `finished`. | Go for lunch → "✅ Run finished", project card says **Built** — nothing was built. | New `needs-answer` state ("⏸ waiting for you"). Answering later (banner, chat, phone) **resumes the same session**. |
 | **Old messages leaked into new runs.** Notes queued while no run was listening (e.g. when the manager was offline) stayed unread. | A new, unrelated run read last week's instruction at its first inbox check. | Launching a run starts with an empty inbox; failed-chat messages are queued only when a run is listening. |
 | **Any web page could crash the office** (`Origin: null` → `new URL("null")` throws → process exits) and, via DNS rebinding, **drive it** (Host header was never checked). | A malicious page could start runs — which execute code on the user's computer. | Only `localhost`/`127.0.0.1` Host accepted; unparsable Origin = foreign. |
-| **"Improve Merage Hub" edited the Dev Studio itself** (the `merage-hub` alias pointed at the studio repo). | Chip on every user's first screen for someone else's private project; wrong folder even for the author. | Alias removed; generic chips and plain-language examples. |
+| **"Improve Merage Hub" edited 9to5 itself** (the `merage-hub` alias pointed at the studio repo). | Chip on every user's first screen for someone else's private project; wrong folder even for the author. | Alias removed; generic chips and plain-language examples. |
 | Chat covered the whole page on phones on first visit. | Welcome and examples hidden. | Chat starts as the CHAT button on narrow screens. |
 | Port already in use → stack trace; sign-in hints said "open PowerShell" on every OS. | Launcher window just closes; wrong instructions on Mac. | Friendly messages; OS-aware sign-in hint. |
 
@@ -107,7 +107,7 @@ Today a new user needs Node 18+, the Claude CLI, `claude auth login` in a termin
 **Proposal:**
 - A **Setup checklist** card (backed by a `GET /api/health`) shown until everything is green: *Claude installed* (`claude --version`) · *Signed in* (`claude auth status`) · *GitHub (optional)* (`gh auth status`) · *Phone (optional)*. Each red item has one button or one copyable command and re-checks itself.
 - Check sign-in **before** the first chat message instead of failing inside it.
-- A real cross-platform launcher: a POSIX `bin/devstudio` script, a double-clickable `Dev Studio.command` for macOS, a desktop shortcut option. Longer term: `npx devstudio` or a small desktop app wrapper.
+- A real cross-platform launcher: a POSIX `bin/devstudio` script, a double-clickable `9to5.command` for macOS, a desktop shortcut option. Longer term: `npx devstudio` or a small desktop app wrapper.
 
 ---
 
@@ -142,7 +142,7 @@ Add a playbook `for-non-developers.md` that the architect applies unless the use
 
 ## P1 — Protect the user's computer and files
 
-- **Projects live next to the studio repo** (`PROJECTS_ROOT = path.resolve(ROOT, "..")` in `runner.mjs`). Clone the studio into your home folder or Documents and the "sibling project folders" are your personal folders: the manager sees all their names, and a new project named like one of them (`photos`, `music`, `budget`; on Windows/macOS `music` *is* `Music`) is treated as an existing project, so `git init` runs and `.claude/` gets written into it. **Use a dedicated folder** (e.g. `~/Dev Studio Projects`, configurable), mark studio projects with a `.devstudio` file, and list only those.
+- **Projects live next to the studio repo** (`PROJECTS_ROOT = path.resolve(ROOT, "..")` in `runner.mjs`). Clone the studio into your home folder or Documents and the "sibling project folders" are your personal folders: the manager sees all their names, and a new project named like one of them (`photos`, `music`, `budget`; on Windows/macOS `music` *is* `Music`) is treated as an existing project, so `git init` runs and `.claude/` gets written into it. **Use a dedicated folder** (e.g. `~/9to5 Projects`, configurable), mark studio projects with a `.devstudio` file, and list only those.
 - **`prepareProject` overwrites the project's `.claude/agents/*.md`, `.claude/skills/team/SKILL.md` and playbooks on every run.** In an existing project with its own agents of the same names, those are silently replaced. Namespace them or skip files that differ.
 - **Undo.** Before each run on an existing project, commit a checkpoint (the folder is already a git repo), and offer **↶ Undo this run** on the project card.
 - **Be honest about the sandbox.** The allowlist is not a security boundary: `Bash(node:*)`, `python`, `make`, `npm install` scripts can do anything, so "can't delete files" is aspirational. `T task <id> verify` also `execSync`s architect-written commands outside Claude's permission checks. Say so plainly in the UI and README, check `verify` commands against the deny list, and offer Claude Code's sandboxing or a container for untrusted work.
@@ -179,7 +179,7 @@ Telegram setup (BotFather → token → pairing link) is fine for enthusiasts. F
 - **No automated tests** for the office. Add a zero-dependency `node --test` suite for `parseDirectives`, `parseResetTime`, `resolveProject`, the stream parser and the runner's state machine. The fake-`claude` approach used to verify this branch's fixes works well for the runner.
 - A small CI workflow: `node --check` on every file + the tests.
 - A top-level `try/catch` in the request handler, so one bad request can never take the office down again.
-- The name "Vikrant's Dev Studio" is hard-coded in the page title, header and Telegram texts. Make it configurable if other people will use it.
+- The name "9to5" is hard-coded in the page title, header and Telegram texts. Make it configurable if other people will use it.
 
 ---
 

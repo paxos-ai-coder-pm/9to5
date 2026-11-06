@@ -2,12 +2,19 @@
 
 // ---------- view: "simple" (default) or "tech" (behind the scenes) ----------
 export const isSimple = () => !document.documentElement.classList.contains("tech-view");
-export function setView(view) {
-  document.documentElement.classList.toggle("tech-view", view === "tech");
-  try {
-    localStorage.setItem("view", view);
-  } catch {}
-  window.dispatchEvent(new CustomEvent("viewchange", { detail: view }));
+export function setView(view, { turn = false } = {}) {
+  const apply = () => {
+    document.documentElement.classList.toggle("tech-view", view === "tech");
+    try {
+      localStorage.setItem("view", view);
+    } catch {}
+    window.dispatchEvent(new CustomEvent("viewchange", { detail: view }));
+  };
+  // switching views turns the page like a book's (the old view lifts away from its left edge); not for people who
+  // turned motion off, and not where the browser can't
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (turn && document.startViewTransition && !still) document.startViewTransition(apply);
+  else apply();
 }
 
 // ---------- dialogs: focus moves in, Tab stays inside, Escape closes, focus returns to the opener ----------
@@ -19,7 +26,8 @@ export function createDialog(back, { onClose } = {}) {
   function open() {
     opener = document.activeElement;
     back.hidden = false;
-    requestAnimationFrame(() => (focusables()[1] || focusables()[0] || box).focus());
+    // move focus in the moment it shows (a frame later, keyboard and screen-reader users were briefly left behind it)
+    (focusables()[1] || focusables()[0] || box).focus();
   }
   function close() {
     if (back.hidden) return;

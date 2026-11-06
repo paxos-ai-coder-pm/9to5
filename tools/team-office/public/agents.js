@@ -30,19 +30,19 @@ export const stepIndex = (phase) => ({ plan: 0, build: 1, test: 2, fix: 2, revie
 export const taskLabel = (t, simple = true) => (simple && t.plain) || t.title;
 
 export const STATUS = {
-  done: { icon: "✓", label: "Done" },
-  active: { icon: "▶", label: "Active" },
-  ready: { icon: "◆", label: "Ready" },
-  blocked: { icon: "✖", label: "Blocked" },
-  pending: { icon: "○", label: "Pending" },
+  done: { label: "Done" },
+  active: { label: "Active" },
+  ready: { label: "Ready" },
+  blocked: { label: "Blocked" },
+  pending: { label: "Pending" },
 };
 
 export const AGENT_STATE = {
-  idle: { icon: "☕", label: "On break" },
-  working: { icon: "⌨", label: "Working" },
-  waiting: { icon: "…", label: "Waiting" },
-  done: { icon: "✓", label: "Done" },
-  failed: { icon: "✖", label: "Found something to fix" },
+  idle: { label: "On break" },
+  working: { label: "Working" },
+  waiting: { label: "Waiting" },
+  done: { label: "Done" },
+  failed: { label: "Found something to fix" },
 };
 
 // A pending task whose dependencies are all done is "ready" (AmnesiaGraph semantics).
@@ -74,8 +74,18 @@ export function fmtDur(ms) {
   const s = Math.max(0, Math.round(ms / 1000));
   const m = Math.floor(s / 60);
   const h = Math.floor(m / 60);
+  if (h >= 24) return `${Math.floor(h / 24)}d ${h % 24}h`;
   if (h) return `${h}h ${String(m % 60).padStart(2, "0")}m`;
   return `${m}:${String(s % 60).padStart(2, "0")}`;
+}
+
+// The letters on the logo tile, shared with the launch page: a one-word name is shown itself ("9to5" → "9TO5"), a longer
+// one by its initials ("Vikrant's Dev Studio" → "VDS"; "Vikrant's" is one word, not "Vikrant" + "s"). At most four.
+export function getInitials(name) {
+  const words = String(name || "").split(/\s+/).filter(Boolean);
+  if (words.length === 1) return words[0].replace(/[^A-Za-z0-9]/g, "").slice(0, 4).toUpperCase() || "9TO5";
+  const letters = words.map((w) => w.match(/[A-Za-z0-9]/)?.[0]).filter(Boolean);
+  return letters.length >= 2 ? letters.slice(0, 4).join("").toUpperCase() : "9TO5";
 }
 
 export function esc(s) {

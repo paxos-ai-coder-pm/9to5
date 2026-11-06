@@ -5,30 +5,37 @@
 import { AGENT_BY_ID, esc, prettyModel } from "./agents.js";
 import { postJson, openProject, isSimple } from "./ui.js";
 
-// Minimal, safe markdown for chat bubbles: escape first, then code blocks, inline code, bold, links to http(s) only.
+// Minimal, safe markdown for chat bubbles: escape first, then code blocks, inline code, bold, bullets, and links to
+// http(s) only — [text](url) or a bare address (the team posts repo URLs as plain text).
 function md(text) {
-  const blocks = [];
-  let s = esc(text).replace(/```[\w-]*\n?([\s\S]*?)```/g, (_, code) => {
-    blocks.push(`<pre class="md-code">${code.replace(/\n$/, "")}</pre>`);
-    return `\u0000${blocks.length - 1}\u0000`;
-  });
-  s = s
-    .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+  const kept = []; // finished HTML set aside, so later steps (bare links, bullets) don't reach inside it
+  const keep = (html) => `\u0000${kept.push(html) - 1}\u0000`;
+  const link = (href, label) => `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+  let s = esc(text)
+    // a code block is its own block: drop the line breaks around it (the box has its own margin)
+    .replace(/\n{0,2}```[\w-]*\n?([\s\S]*?)```\n{0,2}/g, (_, code) => keep(`<pre class="md-code">${code.replace(/\n$/, "")}</pre>`))
+    .replace(/`([^`\n]+)`/g, (_, code) => keep(`<code>${code}</code>`))
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label, href) => keep(link(href, label)))
+    // a bare address ends at a space, an escaped quote or bracket; trailing punctuation belongs to the sentence
+    .replace(/https?:\/\/(?:(?!&quot;|&#39;|&lt;|&gt;)[^\s\u0000])+/g, (url) => {
+      const [, href, tail] = url.match(/^(.*?)([.,;:!?)*]*)$/);
+      return keep(link(href, href)) + tail;
+    })
     .replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")
-    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
-    .replace(/^#{1,4} (.+)$/gm, "<b>$1</b>");
-  return s.replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[+i]);
+    .replace(/^#{1,4} (.+)$/gm, "<b>$1</b>")
+    .replace(/^([ \t]*)[-*] (?=\S)/gm, "$1• ");
+  return s.replace(/\u0000(\d+)\u0000/g, (_, i) => kept[+i]);
 }
 
 const SIZE = { quick: "Quick change", standard: "Standard", full: "Full team (extra checks)" };
 const ACTION = {
-  continue: "↻ CONTINUE",
-  retry: "↻ TRY AGAIN",
-  setup: "⚙ SHOW ME HOW TO FIX IT",
-  ask: "WHAT HAPPENED?",
-  open: "▶ OPEN IT",
-  change: "✎ CHANGE SOMETHING",
-  redo: "↷ REDO",
+  continue: '<svg class="icon" aria-hidden="true"><use href="#i-redo"/></svg> Continue',
+  retry: '<svg class="icon" aria-hidden="true"><use href="#i-redo"/></svg> Try again',
+  setup: '<svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg> Show me how to fix it',
+  ask: "What happened?",
+  open: '<svg class="icon" aria-hidden="true"><use href="#i-play"/></svg> Open it',
+  change: '<svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg> Change something',
+  redo: '<svg class="icon" aria-hidden="true"><use href="#i-redo"/></svg> Redo',
 };
 const firstLine = (t) => String(t || "").split("\n")[0];
 
@@ -41,10 +48,12 @@ export function createChat({ onSetup } = {}) {
   let chat = { messages: [], busy: false };
   let lastCount = -1;
   let unread = 0;
-  // open by default on wide screens; on phones it would cover the whole page, so start as the CHAT button there
-  const savedOpen = localStorage.getItem("chatOpen");
-  let open = savedOpen ? savedOpen !== "0" : window.matchMedia("(min-width: 1101px)").matches;
   let lastError = "";
+  const wide = window.matchMedia("(min-width: 1101px)");
+  const phone = window.matchMedia("(max-width: 600px)");
+  const chatBackground = document.querySelectorAll("body > :is(.skip, .top, .setup, .ask-banner, .welcome, .banner), .grid > :not(#chat)");
+  const inPage = () => wide.matches && isSimple();
+  let open = wide.matches && localStorage.getItem("chatOpen") !== "0";
 
   // The voice feature was removed: clear its cached model (~92 MB) and settings from this browser.
   if ("caches" in window) ["transformers-cache", "kokoro-voices"].forEach((c) => caches.delete(c).catch(() => {}));
@@ -52,9 +61,24 @@ export function createChat({ onSetup } = {}) {
 
   function setOpen(v, focus = true) {
     open = v;
-    localStorage.setItem("chatOpen", v ? "1" : "0");
+    if (wide.matches && !inPage()) localStorage.setItem("chatOpen", v ? "1" : "0");
+    show(focus);
+  }
+
+  function show(focus = false) {
+    const v = open || inPage();
+    const modal = v && phone.matches;
+    for (const section of chatBackground) section.inert = modal;
+    if (modal) {
+      box.setAttribute("role", "dialog");
+      box.setAttribute("aria-modal", "true");
+    } else {
+      box.removeAttribute("role");
+      box.removeAttribute("aria-modal");
+    }
     box.hidden = !v;
     fab.hidden = v;
+    fab.setAttribute("aria-expanded", String(v));
     document.body.classList.toggle("chat-open", v);
     if (v) {
       unread = 0;
@@ -87,31 +111,30 @@ export function createChat({ onSetup } = {}) {
     const msgs = chat.messages || [];
     const lastIdx = msgs.length - 1;
     if (!msgs.length) {
-      log.innerHTML = `<li class="empty">👋 I'm Maya, your manager.<br>Tell me what you'd like — in your own words. I'll ask a couple of quick questions, show you the plan, and get the team started once you say go.</li>`;
+      log.innerHTML = `<li class="empty"><span class="chat-welcome-icon" aria-hidden="true"><svg class="icon"><use href="#i-spark"/></svg></span><strong>Hi, I’m Maya.</strong><p>Tell me what you have in mind. I’ll draft a plan for you to review before the team starts.</p></li>`;
     } else {
       log.innerHTML = msgs
         .map((m, i) => {
           const details = m.details ? `<details class="msg-details"><summary>Details</summary><pre>${esc(m.details)}</pre></details>` : "";
           if (m.from === "system")
             return `<li class="sys"><span class="text">${esc(m.text)}</span>${m.proposal ? proposalCard(m.proposal) : ""}${actionButtons(m.actions)}${details}</li>`;
-          if (m.from === "user") return `<li class="me"><span class="from">${m.answer ? "YOU → TEAM" : "YOU"}${m.via === "telegram" ? " · 📱" : ""}</span><span class="text">${esc(m.text)}</span></li>`;
+          if (m.from === "user") return `<li class="me"><span class="from">${m.answer ? "You → team" : "You"}${m.via === "telegram" ? " · from your phone" : ""}</span><span class="text">${esc(m.text)}</span></li>`;
           const a = AGENT_BY_ID[m.from];
           const openAsk = m.ask && chat.ask && !chat.ask.answered && chat.ask.text === m.text;
           const answers = openAsk
-            ? `<div class="q-actions">${(m.options?.length ? m.options.map((o) => `<button type="button" class="px-btn small" data-answer="${esc(o)}">${esc(o)}</button>`) : [`<button type="button" class="px-btn small" data-answer="Approved - go ahead.">✓ APPROVE</button>`]).join("")}<button type="button" class="px-btn small ghost" data-reply="1">✎ REPLY</button></div>`
+            ? `<div class="q-actions">${(m.options?.length ? m.options.map((o) => `<button type="button" class="px-btn small" data-answer="${esc(o)}">${esc(o)}</button>`) : [`<button type="button" class="px-btn small" data-answer="Approved - go ahead.">Approve</button>`]).join("")}<button type="button" class="px-btn small ghost" data-reply="1"><svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg> Reply</button></div>`
             : "";
           // the manager's suggested answers, while they're still the latest thing in the chat
           const choices = m.choices?.length && i === lastIdx && !chat.busy ? `<div class="choices">${m.choices.map((c) => `<button type="button" data-send="${esc(c)}">${esc(c)}</button>`).join("")}</div>` : "";
-          return `<li class="them${openAsk ? " question" : ""}"><span class="from"><i style="background:${a?.color || "#888"}"></i>${who(m)}${openAsk ? " · ❓ NEEDS YOUR ANSWER" : ""}</span><span class="text">${md(m.text)}</span>${m.report ? reportCard(m.report) : ""}${(m.relays || []).map((r) => `<span class="relay">${esc(r)}</span>`).join("")}${m.proposal ? proposalCard(m.proposal) : ""}${answers}${choices}${details}</li>`;
+          return `<li class="them${openAsk ? " question" : ""}"><span class="from"><i style="background:${a?.color || "var(--text-muted)"}"></i>${who(m)}${openAsk ? " · needs your answer" : ""}</span><span class="text">${md(m.text)}</span>${m.report ? reportCard(m.report) : ""}${(m.relays || []).map((r) => `<span class="relay">${esc(r)}</span>`).join("")}${m.proposal ? proposalCard(m.proposal) : ""}${answers}${choices}${details}</li>`;
         })
         .join("");
     }
     // while the manager is replying, show the reply as it's being written
-    if (chat.busy) log.insertAdjacentHTML("beforeend", `<li class="them typing"><span class="from"><i style="background:#e66767"></i>${isSimple() ? "MAYA" : "MANAGER"}</span><span class="text" id="draftText"></span></li>`);
+    if (chat.busy) log.insertAdjacentHTML("beforeend", `<li class="them typing"><span class="from"><i style="background:${AGENT_BY_ID.manager.color}"></i>${isSimple() ? "MAYA" : "MANAGER"}</span><span class="text" id="draftText"></span></li>`);
     if (lastError) log.insertAdjacentHTML("beforeend", `<li class="sys"><span class="text">${esc(lastError)}</span></li>`);
-    renderDraft();
 
-    status.textContent = chat.busy ? (chat.draft ? "● typing…" : "● thinking…") : lastError ? "● can't reach the office" : "● online";
+    status.textContent = chat.busy ? (chat.draft ? "Typing…" : "Thinking…") : lastError ? "Unavailable" : "Online";
     status.className = "chat-status" + (chat.busy ? " busy" : lastError ? " off" : "");
     $("chatModel").textContent = chat.managerModel ? `· ${prettyModel(chat.managerModel)}` : "";
     $("chatModel").title = chat.managerModel ? `Manager model: ${chat.managerModel}` : "";
@@ -119,6 +142,7 @@ export function createChat({ onSetup } = {}) {
     renderChips();
     renderRunBar();
     renderQueue();
+    renderDraft(); // last: the run bar and the chips change how tall the log is
   }
 
   // Quick replies that fit the moment.
@@ -126,13 +150,14 @@ export function createChat({ onSetup } = {}) {
     const run = chat.run;
     const recent = run && Date.now() - (run.endedAt || 0) < 6 * 3600e3;
     let chips;
-    if (chat.ask && !chat.ask.answered) chips = [["Explain it simply", "Explain the team's question in simple terms — what will I get?"], ["✎ Reply to the team", "reply"]];
+    if (chat.ask && !chat.ask.answered) chips = [["Explain it simply", "Explain the team's question in simple terms — what will I get?"], ["Reply to the team", "reply"]];
     else if (run?.status === "running") chips = [["What's happening now?"], ["How long will it take?"], ["Anything I need to do?"]];
     else if (run?.status === "waiting") chips = [["When does it continue?"], ["What's done so far?"]];
     else if (run?.status === "needs-answer") chips = [["What does the team need from me?"], ["Explain the question simply"]];
     else if (run?.status === "finished" && recent) chips = [["How do I use it?"], ["Put it online"], ["What could we improve next?"]];
     else if (["failed", "interrupted"].includes(run?.status) && recent) chips = [["What went wrong?"], ["Can the team fix it?"]];
-    else chips = [["Start something new", "I want to build something new — ask me what you need to know."], ["Improve one of my projects", "I want to improve one of my existing projects — which ones can the team work on?"], ["What can the team do?"]];
+    else chips = [["Improve a project", "I want to improve one of my existing projects — which ones can the team work on?"], ["What can the team do?"]];
+    if (chat.proposal) chips = []; // a plan is waiting for Start: that's the next step, and it gets the room
     $("chatSuggest").innerHTML = chips.map(([label, action]) => `<button type="button" data-chip="${esc(action || label)}">${esc(label)}</button>`).join("");
   }
 
@@ -208,12 +233,12 @@ export function createChat({ onSetup } = {}) {
     const busy = ["running", "waiting"].includes(chat.run?.status);
     const folder = p.dir.split(/[\\/]/).pop();
     return `<div class="proposal">
-      <div class="p-head">🚀 READY TO START · ${esc(SIZE[p.size] || SIZE.standard)}${p.estimate ? ` · usually about ${p.estimate} min` : ""}</div>
+      <div class="p-head"><span class="p-label">Ready to start</span> · ${esc(SIZE[p.size] || SIZE.standard)}${p.estimate ? ` · usually about ${p.estimate} min` : ""}</div>
       <div class="p-task">${esc(p.task)}</div>
-      <div class="p-dir" title="${esc(p.dir)}">📁 ${p.isNew ? `New project “${esc(folder)}”` : `Changes to “${esc(folder)}”`}<span class="tech"> — ${esc(p.dir)}</span></div>
-      ${p.foreign ? `<div class="p-warn">⚠ This folder already has files the studio didn't make — the team will change them. (You can undo the run afterwards.)</div>` : ""}
-      ${p.allowGithub ? `<div class="p-github">🔓 This run may <b>publish to GitHub</b>${p.githubAccount ? ` as <b>${esc(p.githubAccount)}</b>` : ""} (no force-push or deletes). Starting it gives that permission for this run only.</div>` : ""}
-      ${pending ? `<div class="p-actions"><button type="button" class="px-btn small" data-run="start" data-id="${esc(p.id)}">${busy ? "⏭ QUEUE IT" : "▶ START"}</button><button type="button" class="px-btn small ghost" data-run="dismiss" data-id="${esc(p.id)}">NOT YET</button></div>${busy ? `<div class="p-note">The team is busy — this starts right after the current run.</div>` : ""}` : ""}
+      <div class="p-dir" title="${esc(p.dir)}">${p.isNew ? `New project “${esc(folder)}”` : `Changes to “${esc(folder)}”`}<span class="tech"> — ${esc(p.dir)}</span></div>
+      ${p.foreign ? `<div class="p-warn"><b>Heads up:</b> this folder already has files the studio didn't make — the team will change them. (You can undo the run afterwards.)</div>` : ""}
+      ${p.allowGithub ? `<div class="p-github">This run may <b>publish to GitHub</b>${p.githubAccount ? ` as <b>${esc(p.githubAccount)}</b>` : ""} (no force-push or deletes). Starting it gives that permission for this run only.</div>` : ""}
+      ${pending ? `<div class="p-actions"><button type="button" class="px-btn small" data-run="start" data-id="${esc(p.id)}">${busy ? "Queue it" : '<svg class="icon" aria-hidden="true"><use href="#i-play"/></svg> Start'}</button><button type="button" class="px-btn small ghost" data-run="dismiss" data-id="${esc(p.id)}">Not yet</button></div>${busy ? `<div class="p-note">The team is busy — this starts right after the current run.</div>` : ""}` : ""}
     </div>`;
   }
 
@@ -221,26 +246,26 @@ export function createChat({ onSetup } = {}) {
     const bar = $("runBar");
     const run = chat.run;
     if (!run) return void (bar.hidden = true);
-    const icon = { running: "●", waiting: "⏳", "needs-answer": "⏸", finished: "✓", failed: "✖", stopped: "■", interrupted: "!" }[run.status] || "●";
+    const mark = { running: "active", waiting: "ready", "needs-answer": "ready", finished: "done", failed: "blocked", stopped: "pending", interrupted: "blocked" }[run.status] || "active";
     const active = ["running", "waiting", "needs-answer"].includes(run.status);
     const recent = active || Date.now() - (run.endedAt || 0) < 10 * 60 * 1000;
     bar.hidden = !recent;
     bar.className = "run-bar " + run.status;
-    const words = { running: "WORKING", finished: "FINISHED", failed: "NEEDS ATTENTION", stopped: "STOPPED", interrupted: "INTERRUPTED" };
-    let label = `${icon} ${words[run.status] || run.status.toUpperCase()}`;
+    const words = { running: "Working", finished: "Finished", failed: "Needs attention", stopped: "Stopped", interrupted: "Interrupted" };
+    let label = words[run.status] || run.status;
     let detail = `${run.project} · ${firstLine(run.task)}`;
     if (run.status === "waiting") {
       const mins = Math.max(0, Math.round((run.resumeAt - Date.now()) / 60000));
       const at = new Date(run.resumeAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-      label = `⏳ PAUSED`;
+      label = "Paused";
       detail = `Out of usage — continues at ${at} (${mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins} min`})`;
     } else if (run.status === "needs-answer") {
-      label = "⏸ WAITING FOR YOU";
+      label = "Waiting for you";
       detail = "The team needs your answer to continue — nothing is built yet";
     } else if (run.attempts > 1 && run.status === "running" && !isSimple()) detail += ` · attempt ${run.attempts}`;
     const stopTitle = { waiting: "Cancel the automatic resume", "needs-answer": "Cancel this run instead of answering" }[run.status] || "Stop the team";
-    bar.innerHTML = `<span class="r-status">${esc(label)}</span><span class="r-task" title="${esc(run.task)}">${esc(detail)}</span>${
-      active ? `<button type="button" class="px-btn small ghost" data-run="stop" title="${stopTitle}">■ STOP</button>` : ""
+    bar.innerHTML = `<span class="r-status"><span class="chip ${mark}" aria-hidden="true"></span>${esc(label)}</span><span class="r-task" title="${esc(run.task)}">${esc(detail)}</span>${
+      active ? `<button type="button" class="px-btn small ghost" data-run="stop" title="${stopTitle}"><svg class="icon" aria-hidden="true"><use href="#i-stop"/></svg> Stop</button>` : ""
     }`;
   }
 
@@ -249,7 +274,7 @@ export function createChat({ onSetup } = {}) {
     const bar = $("queueBar");
     bar.hidden = !q.length;
     bar.innerHTML = q.length
-      ? `<span class="q-label">NEXT UP</span><ol>${q.map((x, i) => `<li><span>${esc(x.task)}</span><button type="button" class="icon-btn small" data-unqueue="${i}" aria-label="Remove “${esc(x.task)}” from the queue" title="Remove from the queue">✕</button></li>`).join("")}</ol>`
+      ? `<span class="q-label">Next up</span><ol>${q.map((x, i) => `<li><span>${esc(x.task)}</span><button type="button" class="icon-btn small" data-unqueue="${i}" aria-label="Remove “${esc(x.task)}” from the queue" title="Remove from the queue">✕</button></li>`).join("")}</ol>`
       : "";
   }
 
@@ -294,7 +319,7 @@ export function createChat({ onSetup } = {}) {
         const incoming = fresh.filter((m) => m.from !== "user");
         // screen readers hear only the new messages, not the whole log again
         if (incoming.length) live.textContent = incoming.map((m) => `${AGENT_BY_ID[m.from]?.name || "Office"}: ${m.text}`).join(" … ").slice(0, 600);
-        if (!open) {
+        if (box.hidden) {
           unread += incoming.length;
           badge.textContent = unread;
           badge.hidden = !unread;
@@ -311,7 +336,7 @@ export function createChat({ onSetup } = {}) {
       if (changed) render();
       else if (draftChanged) {
         renderDraft(); // only the streaming text moved — don't rebuild the whole log
-        status.textContent = chat.draft ? "● typing…" : "● thinking…";
+        status.textContent = chat.draft ? "Typing…" : "Thinking…";
       }
     } catch {
       if (!lastError) {
@@ -323,26 +348,37 @@ export function createChat({ onSetup } = {}) {
     }
   }
 
-  async function send(text) {
+  async function send(text, fromIdea = false) {
     text = text.trim();
     if (!text) return;
-    if (replyAsk) {
+    if (replyAsk && !fromIdea) {
       input.value = "";
       autosize();
       return answer(text); // reply mode → straight to the team's inbox
     }
     if (chat.busy) return;
-    input.value = "";
-    autosize();
+    if (!fromIdea) {
+      input.value = "";
+      autosize();
+    }
     chat = { ...chat, busy: true, messages: [...(chat.messages || []), { from: "user", text }] };
     render();
     try {
       await postJson("/api/chat", { text });
       lastError = "";
     } catch (x) {
-      lastError = x.message === "Failed to fetch" ? "Can't reach the office." : x.message;
+      // nothing was sent: say why in plain words, and give the words back (the idea box keeps its own copy)
+      const why = x.message === "Failed to fetch" ? "the office isn't responding — check that it's still running"
+        : /^(forbidden|bad request|not found|Request failed)/.test(x.message) ? "the office couldn't take it"
+        : x.message.replace(/\.$/, "");
+      lastError = `Not sent — ${why}. Your message is still in the box, so you can send it again.`;
+      if (!fromIdea && !input.value.trim()) {
+        input.value = text;
+        autosize();
+      }
     }
     poll();
+    return lastError;
   }
 
   // ---- text input ----
@@ -352,11 +388,14 @@ export function createChat({ onSetup } = {}) {
   }
   input.addEventListener("input", autosize);
   input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       send(input.value);
     }
-    if (e.key === "Escape" && replyAsk) setReply(null); // Escape leaves reply mode
+    if (e.key === "Escape" && replyAsk) {
+      e.stopPropagation();
+      setReply(null);
+    }
   });
   form.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -401,12 +440,21 @@ export function createChat({ onSetup } = {}) {
     });
   }
 
-  $("chatMin").addEventListener("click", () => {
+  function minimize() {
     setOpen(false);
     fab.focus();
+  }
+  $("chatMin").addEventListener("click", minimize);
+  box.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !inPage()) minimize();
   });
   fab.addEventListener("click", () => setOpen(true));
-  window.addEventListener("viewchange", () => render());
+  window.addEventListener("viewchange", () => (show(), render()));
+  phone.addEventListener("change", () => show());
+  wide.addEventListener("change", () => {
+    open = wide.matches && localStorage.getItem("chatOpen") !== "0";
+    show();
+  });
 
   setOpen(open, false);
   render();
@@ -426,5 +474,12 @@ export function createChat({ onSetup } = {}) {
     input.setSelectionRange(text.length, text.length);
   }
 
-  return { open: () => setOpen(true), refresh: () => poll(), replyTo, prefill };
+  function sendIdea(text) {
+    if (chat.busy) return "Maya is replying. Try again in a moment.";
+    setOpen(true, false);
+    box.focus({ preventScroll: inPage() });
+    return send(text, true);
+  }
+
+  return { open: () => setOpen(true), refresh: () => poll(), replyTo, prefill, sendIdea };
 }

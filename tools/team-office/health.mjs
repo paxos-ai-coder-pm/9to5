@@ -1,10 +1,40 @@
 // Setup checklist: is everything the studio needs installed and signed in? Each check carries a plain-language fix.
 import fs from "node:fs";
+import path from "node:path";
 import { execFile } from "node:child_process";
 import { claudeEnv, signInHint } from "./lib.mjs";
 
 export const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
 export const GH_BIN = process.env.GH_BIN || "gh";
+
+/**
+ * How to start the Claude CLI: [program, arguments that go first]. Node can't start a .cmd without a shell, and on
+ * Windows an npm install of Claude Code only creates claude.cmd — so start what that .cmd starts (Node with the CLI's
+ * script, or the .exe it wraps). Everywhere else, and for the Windows installer's claude.exe: [bin, []].
+ */
+export function resolveClaude(bin = CLAUDE_BIN, { platform = process.platform, pathEnv = process.env.PATH || "" } = {}) {
+  if (platform !== "win32") return [bin, []];
+  let cmd = /\.cmd$/i.test(bin) ? bin : null;
+  if (!cmd && !/[\\/]/.test(bin) && !path.extname(bin)) {
+    // the first PATH folder that has it wins, as in a terminal (.exe before .cmd in the same folder)
+    for (const dir of pathEnv.split(path.delimiter).filter(Boolean)) {
+      if ([".com", ".exe"].some((ext) => fs.existsSync(path.join(dir, bin + ext)))) return [bin, []];
+      if (fs.existsSync(path.join(dir, bin + ".cmd"))) {
+        cmd = path.join(dir, bin + ".cmd");
+        break;
+      }
+    }
+  }
+  if (!cmd) return [bin, []];
+  // npm's shim ends with: "%dp0%\node_modules\@anthropic-ai\claude-code\cli.js" %*  (older npm: "%~dp0\…")
+  let target;
+  try {
+    target = fs.readFileSync(cmd, "utf8").match(/"%~?dp0%?\\([^"]+)"\s+%\*/)?.[1];
+  } catch {}
+  if (!target) return [bin, []];
+  const full = path.join(path.dirname(cmd), ...target.split("\\"));
+  return /\.[cm]?js$/i.test(full) ? [process.execPath, [full]] : [full, []];
+}
 
 function run(bin, args, { env, timeout = 20000 } = {}) {
   return new Promise((resolve) => {
@@ -27,12 +57,7 @@ export function parseAuthStatus(stdout) {
   }
 }
 
-// On Windows the office starts `claude` directly, which finds claude.exe (the Windows installer) but not the
-// claude.cmd that an npm install creates — so don't suggest npm there.
-const installClaude =
-  process.platform === "win32"
-    ? { text: "Install Claude Code for Windows (the app the team runs on) from its website, then click Check again.", link: "https://claude.com/claude-code" }
-    : { text: "Install Claude Code (the app the team runs on), then click Check again.", command: "npm install -g @anthropic-ai/claude-code", link: "https://claude.com/claude-code" };
+const installClaude = { text: "Install Claude Code (the app the team runs on), then click Check again.", command: "npm install -g @anthropic-ai/claude-code", link: "https://claude.com/claude-code" };
 
 /**
  * Run every check. `extra` supplies things the server already knows: { githubAccount, projectsDir }.
@@ -40,9 +65,10 @@ const installClaude =
  */
 export async function checkHealth({ githubAccount = null, projectsDir } = {}) {
   const env = claudeEnv();
+  const [bin, pre] = resolveClaude();
   const [claude, auth, git, gh] = await Promise.all([
-    run(CLAUDE_BIN, ["--version"], { env }),
-    run(CLAUDE_BIN, ["auth", "status", "--json"], { env }),
+    run(bin, [...pre, "--version"], { env }),
+    run(bin, [...pre, "auth", "status", "--json"], { env }),
     run("git", ["--version"]),
     run(GH_BIN, ["--version"]),
   ]);

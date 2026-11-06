@@ -12,9 +12,10 @@ import { unsafeReason } from "../guard.mjs";
 import { median, typicalRunMinutes, minutesLeft, fmtMinutes, explainFailure } from "../insights.mjs";
 import { zipDirectory, crc32, listFiles } from "../zip.mjs";
 import { createCheckpoint, restoreCheckpoint, gitAvailable, hasCheckpoint } from "../checkpoint.mjs";
-import { parseAuthStatus } from "../health.mjs";
+import { parseAuthStatus, resolveClaude } from "../health.mjs";
 import { createStreamParser } from "../stream.mjs";
-import { claudeEnv } from "../lib.mjs";
+import { claudeEnv, emptyState, setAgent, AGENTS } from "../lib.mjs";
+import { parseResetTime } from "../runner.mjs";
 import { REPO } from "./helpers.mjs";
 
 const temps = [];
@@ -213,6 +214,14 @@ test("zip: round-trips files and leaves out secrets, git and dependencies", () =
   }
 });
 
+test("setAgent: a quiet update changes the card without a line in the activity log", () => {
+  const s = emptyState("Build it");
+  setAgent(s, "manager", "working", "Replying to you", { quiet: true });
+  assert.deepEqual([s.agents.manager.state, s.agents.manager.activity, s.events.length], ["working", "Replying to you", 0]);
+  setAgent(s, "manager", "waiting", "Relayed 1 note(s) to team");
+  assert.equal(s.events.at(-1).msg, "Relayed 1 note(s) to team");
+});
+
 test("claudeEnv: a team run doesn't inherit the Claude Code session the office was started from", () => {
   const keep = { ...process.env };
   Object.assign(process.env, { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "parent-session", CLAUDE_CODE_REMOTE_SESSION_ID: "cse_parent", CLAUDE_CODE_CHILD_SESSION: "1", CLAUDE_CODE_MESSAGING_SOCKET: "/tmp/parent.sock", CLAUDE_CODE_MESSAGING_TOKEN: "t", CLAUDE_PID: "1", CLAUDE_CODE_MAX_OUTPUT_TOKENS: "8000" });
@@ -228,7 +237,8 @@ test("claudeEnv: a team run doesn't inherit the Claude Code session the office w
 });
 
 test("the team's instructions never have the model save files under .claude/ (Claude Code refuses that in a headless run)", () => {
-  const files = [path.join(REPO, ".claude", "skills", "team", "SKILL.md"), ...fs.readdirSync(path.join(REPO, ".claude", "agents")).map((f) => path.join(REPO, ".claude", "agents", f))];
+  // the team's own agents only (.claude/agents may also hold other tools' agents, e.g. Impeccable's)
+  const files = [path.join(REPO, ".claude", "skills", "team", "SKILL.md"), ...AGENTS.map((a) => path.join(REPO, ".claude", "agents", `${a}.md`))];
   for (const f of files) {
     const bad = fs.readFileSync(f, "utf8").split("\n").filter((l) => /\b(save|write|create|put)\b[^\n]{0,80}`\.claude\//i.test(l));
     assert.deepEqual(bad, [], path.basename(f));
@@ -294,12 +304,53 @@ test("checkpoint: works in a brand-new repo with no commits, and refuses unknown
   assert.equal(createCheckpoint(tmpdir(), "not-a-repo"), null);
 });
 
+// ---------- usage-limit resume ----------
+test("reset time: 12- and 24-hour clocks, in the message's time zone", () => {
+  const now = Date.UTC(2026, 10, 3, 8, 0); // 08:00 UTC
+  const at = (text) => new Date(parseResetTime(text, now)).toISOString();
+  assert.equal(at("resets 3pm (UTC)"), "2026-11-03T15:00:00.000Z");
+  assert.equal(at("resets 15:00 (UTC)"), "2026-11-03T15:00:00.000Z");
+  assert.equal(at("resets 12am (UTC)"), "2026-11-04T00:00:00.000Z");
+  assert.equal(at("resets 12pm (UTC)"), "2026-11-03T12:00:00.000Z");
+  assert.equal(at("resets 7:30 (UTC)"), "2026-11-04T07:30:00.000Z"); // already past today → tomorrow
+  assert.equal(at("resets 10:50pm (America/Los_Angeles)"), "2026-11-04T06:50:00.000Z");
+  assert.equal(parseResetTime("no time in here", now), null);
+});
+
 // ---------- health ----------
 test("health: parses `claude auth status --json`", () => {
   assert.deepEqual(parseAuthStatus('{"loggedIn": true, "authMethod": "oauth_token"}'), { loggedIn: true, method: "oauth_token" });
   assert.equal(parseAuthStatus('{"loggedIn": false}').loggedIn, false);
   assert.equal(parseAuthStatus("Not logged in. Run claude auth login").loggedIn, false);
   assert.equal(parseAuthStatus("").loggedIn, null);
+});
+
+test("health: on Windows an npm-installed claude.cmd is started without a shell", () => {
+  const win = (pathEnv, bin = "claude") => resolveClaude(bin, { platform: "win32", pathEnv });
+  const shimHead = "@ECHO off\r\nGOTO start\r\n:find_dp0\r\nSET dp0=%~dp0\r\nEXIT /b\r\n:start\r\nSETLOCAL\r\nCALL :find_dp0\r\n\r\n";
+  // npm's shim for a Node CLI …
+  const npm = tmpdir();
+  fs.writeFileSync(
+    path.join(npm, "claude.cmd"),
+    shimHead +
+      'IF EXIST "%dp0%\\node.exe" (\r\n  SET "_prog=%dp0%\\node.exe"\r\n) ELSE (\r\n  SET "_prog=node"\r\n  SET PATHEXT=%PATHEXT:;.JS;=;%\r\n)\r\n\r\n' +
+      'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\@anthropic-ai\\claude-code\\cli.js" %*\r\n',
+  );
+  const cli = path.join(npm, "node_modules", "@anthropic-ai", "claude-code", "cli.js");
+  assert.deepEqual(win(npm), [process.execPath, [cli]]);
+  // … and for a package that ships an .exe
+  const native = tmpdir();
+  fs.writeFileSync(path.join(native, "claude.cmd"), shimHead + '"%dp0%\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe"   %*\r\n');
+  assert.deepEqual(win(native), [path.join(native, "node_modules", "@anthropic-ai", "claude-code", "bin", "claude.exe"), []]);
+  // the Windows installer's claude.exe earlier on PATH wins, as in a terminal; nothing found → unchanged
+  const installer = tmpdir();
+  fs.writeFileSync(path.join(installer, "claude.exe"), "");
+  assert.deepEqual(win([installer, npm].join(path.delimiter)), ["claude", []]);
+  assert.deepEqual(win([tmpdir(), npm].join(path.delimiter)), [process.execPath, [cli]]);
+  assert.deepEqual(win(tmpdir()), ["claude", []]);
+  // CLAUDE_BIN set to the .cmd itself works too; other systems start the binary as it is
+  assert.deepEqual(win("", path.join(npm, "claude.cmd")), [process.execPath, [cli]]);
+  assert.deepEqual(resolveClaude("claude", { platform: "darwin" }), ["claude", []]);
 });
 
 // ---------- stream parser ----------

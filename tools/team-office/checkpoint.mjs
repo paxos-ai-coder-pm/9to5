@@ -11,7 +11,7 @@ import { execFileSync } from "node:child_process";
 
 const HEAVY = ["node_modules", ".venv", "venv", "__pycache__", ".next", ".nuxt", "target", ".gradle", "Pods", ".dart_tool", ".claude/team", "tests/scratch"];
 const EXCLUDES = HEAVY.map((d) => `:(glob,exclude)**/${d}/**`);
-const IDENTITY = { GIT_AUTHOR_NAME: "Dev Studio", GIT_AUTHOR_EMAIL: "devstudio@localhost", GIT_COMMITTER_NAME: "Dev Studio", GIT_COMMITTER_EMAIL: "devstudio@localhost" };
+const IDENTITY = { GIT_AUTHOR_NAME: "9to5", GIT_AUTHOR_EMAIL: "devstudio@localhost", GIT_COMMITTER_NAME: "9to5", GIT_COMMITTER_EMAIL: "devstudio@localhost" };
 
 let gitOk = null;
 export function gitAvailable() {
@@ -63,7 +63,7 @@ function snapshotTree(dir) {
 }
 
 /** Snapshot the project. Returns { id, commit, tree } or null (no git / not its own repo / failed). */
-export function createCheckpoint(dir, id, label = "Dev Studio checkpoint") {
+export function createCheckpoint(dir, id, label = "9to5 checkpoint") {
   if (!gitAvailable() || !isRepo(dir)) return null;
   try {
     const tree = snapshotTree(dir);
@@ -101,7 +101,7 @@ export function restoreCheckpoint(dir, id) {
     throw new Error("There's no saved copy to go back to for that change.");
   }
   const redoId = `redo-${Date.now()}`;
-  const before = createCheckpoint(dir, redoId, "Dev Studio: before undo");
+  const before = createCheckpoint(dir, redoId, "9to5: before undo");
   if (!before) throw new Error("Couldn't save the current state before undoing, so nothing was changed.");
 
   const out = git(dir, ["diff-tree", "-r", "-z", "--no-renames", "--name-status", cpTree, before.tree]);
