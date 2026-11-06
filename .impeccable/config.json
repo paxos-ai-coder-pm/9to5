@@ -1,0 +1,78 @@
+{
+  "hook": {
+    "enabled": true,
+    "limits": {
+      "maxFindings": 5,
+      "maxChars": 8000
+    }
+  },
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "undersized-ui-text",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/*.html"
+        ],
+        "createdAt": "2026-11-06T00:58:54.773Z",
+        "reason": "Agent: decision-round sketches at reduced scale, not shipping UI; the built app uses ≥14px functional text"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/*.html"
+        ],
+        "createdAt": "2026-11-06T00:59:04.087Z",
+        "reason": "Agent: decision-round sketch, not shipping UI; the built .pf-new slot has 14-18px padding"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#4a2a14",
+        "files": [
+          "tools/team-office/public/style.css"
+        ],
+        "createdAt": "2026-11-06T03:07:48.983Z",
+        "reason": "Agent: Maya's pixel-art face in the chat button (.fab-face) — teammate identity art, outside the two-tone system by DESIGN.md's Crew Keeps Its Colours rule"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#222",
+        "files": [
+          "tools/team-office/public/style.css"
+        ],
+        "createdAt": "2026-11-06T03:07:49.179Z",
+        "reason": "Agent: Maya's pixel-art face in the chat button (.fab-face) — teammate identity art, outside the two-tone system by DESIGN.md's Crew Keeps Its Colours rule"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#e66767",
+        "files": [
+          "tools/team-office/public/style.css"
+        ],
+        "createdAt": "2026-11-06T03:07:49.378Z",
+        "reason": "Agent: Maya's pixel-art face in the chat button (.fab-face) — teammate identity art, outside the two-tone system by DESIGN.md's Crew Keeps Its Colours rule"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#d9a066",
+        "files": [
+          "tools/team-office/public/style.css"
+        ],
+        "createdAt": "2026-11-06T03:07:49.584Z",
+        "reason": "Agent: Maya's pixel-art face in the chat button (.fab-face) — teammate identity art, outside the two-tone system by DESIGN.md's Crew Keeps Its Colours rule"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "tools/team-office/public/office.js"
+        ],
+        "createdAt": "2026-11-06T05:50:37.162Z",
+        "reason": "Agent: the 3D office scene's own palette (wood, plants, sky, teammates) — outside the two-tone system per DESIGN.md's Crew Keeps Its Colours rule"
+      }
+    ]
+  }
+}

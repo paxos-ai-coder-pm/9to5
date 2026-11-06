@@ -1,0 +1,1 @@
+three.js r187 (MIT, see LICENSE.txt), minified with esbuild 0.24.2 from the npm package's build/three.core.js and build/three.module.js; RoundedBoxGeometry.js is examples/jsm/geometries/RoundedBoxGeometry.js with its import pointed at three.module.min.js.

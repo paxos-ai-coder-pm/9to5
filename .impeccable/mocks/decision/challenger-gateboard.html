@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Boarding Pass &amp; Gate Board</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;background:#e9efe9;color:#000;font:400 15px/1.4 Archivo,sans-serif;font-variant-numeric:tabular-nums}
+header{height:70px;background:#9cb29e;display:flex;align-items:center;gap:20px;padding:0 32px}
+.mark{width:38px;height:38px;background:#000;color:#9cb29e;display:grid;place-items:center;font:800 14px Archivo;font-stretch:62%}
+.head{font-size:21px;font-weight:600}.sw{margin-left:auto;display:flex;background:#000;padding:3px}.sw b{padding:8px 15px;font-size:14px;color:#9cb29e}.sw b.on{background:#9cb29e;color:#000}
+.board{height:44px;background:#000;color:#9cb29e;display:grid;grid-template-columns:110px 1fr 200px 160px 160px;align-items:center;padding:0 32px;font:700 14px Archivo;font-stretch:70%;text-transform:uppercase;letter-spacing:.08em}
+.board .now{color:#000;background:#9cb29e;padding:4px 10px;justify-self:start}
+main{display:grid;grid-template-columns:1.3fr 1fr;grid-template-rows:1.12fr 1fr;gap:16px;padding:16px 32px;height:786px}
+.p{background:#fff;padding:14px 18px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.ph h2{font:800 15px Archivo;font-stretch:65%;text-transform:uppercase;letter-spacing:.1em}
+.office{display:flex;gap:20px;flex:1}.screen{width:520px;height:292px;background:#1b261c;position:relative}.screen i{position:absolute;background:#9cb29e;opacity:.5}
+.who{display:grid;gap:10px;align-content:center}.who div{display:flex;gap:10px;align-items:center}.face{width:30px;height:30px;background:#9cb29e}
+.chat{background:#000;color:#e9efe9;display:flex;flex-direction:column}.ch{padding:12px 16px;border-bottom:1px solid #3c463d;display:flex;gap:10px}.ch b{font:800 16px Archivo;font-stretch:65%;letter-spacing:.1em}
+.log{flex:1;padding:14px;display:flex;flex-direction:column;gap:12px}.them{background:#e9efe9;color:#000;padding:10px 13px;max-width:88%}.me{align-self:flex-end;background:#9cb29e;color:#000;padding:10px 13px}
+.in{display:flex;gap:8px;padding:10px 12px;border-top:1px solid #3c463d}.in div{flex:1;border:1px solid #9cb29e;padding:10px;color:#9cb29e}.in b{width:44px;background:#9cb29e}
+.pass{display:grid;grid-template-columns:1fr 150px;border:2px solid #000}
+.pass .main{padding:12px 14px;display:grid;gap:8px}.pass .stub{border-left:2px dashed #000;padding:12px;display:grid;gap:6px;align-content:start;background:#9cb29e}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.seg span{font:700 10px Archivo;font-stretch:70%;text-transform:uppercase;letter-spacing:.08em;color:#3a4639}.seg b{display:block;font-size:17px;color:#000}
+.btn{background:#000;color:#9cb29e;padding:9px 14px;font-weight:700;font-size:14px}.ghost{border:2px solid #000;padding:8px 13px;font-size:14px;font-weight:600}.row{display:flex;gap:8px}
+.start h3{font:800 42px/1.02 Archivo;font-stretch:75%}.ta{border:2px solid #000;height:76px;padding:10px;color:#3a4639;font-size:17px}
+</style></head><body>
+<header><div class="mark">VDS</div><div class="head">Ready for your next idea</div><div class="sw"><b class="on">Simple</b><b>Behind the scenes</b></div></header>
+<div class="board"><span>No. 014</span><span>Tic Tac Toe — you vs the computer</span><span>Crew: Ben &amp; Chloe</span><span>Signed off · Grace</span><span class="now">Ready</span></div>
+<main>
+  <section class="p"><div class="ph"><h2>Team office</h2></div><div class="office"><div class="screen"><i style="left:30px;top:30px;width:110px;height:40px"></i><i style="left:40px;top:150px;width:430px;height:6px"></i></div>
+    <div class="who"><div><span class="face"></span><b>Maya · Manages</b></div><div><span class="face"></span><b>Asha · Plans</b></div><div><span class="face"></span><b>Ben &amp; Chloe · Build</b></div><div><span class="face"></span><b>Diego, Emma &amp; Farid · Test</b></div><div><span class="face"></span><b>Grace · Reviews</b></div></div></div></section>
+  <aside class="chat"><div class="ch"><span class="face"></span><b>MAYA</b></div><div class="log"><div class="them">The game is built with JavaScript, which is the language web pages use.</div><div class="me">what programming language did you use?</div><div class="them">I can ask Asha to list exactly what's inside.</div></div><div class="in"><div>Tell Maya what to build…</div><b></b></div></aside>
+  <section class="p"><div class="ph"><h2>My projects</h2></div>
+    <div class="pass"><div class="main"><b style="font-size:22px">Tic Tac Toe</b><div class="seg"><span>Status<b>Ready</b></span><span>Changes<b>1</b></span><span>Last run<b>2 h ago</b></span></div><div class="row"><span class="btn">▶ Open</span><span class="ghost">✎ Change</span></div></div><div class="stub"><span style="font:700 11px Archivo">NO.</span><b style="font:800 34px Archivo;font-stretch:62%">014</b></div></div></section>
+  <section class="p start"><div class="ph"><h2>New project</h2></div><h3>What would you like to build?</h3><div class="ta">For example, a budget tracker with monthly totals…</div><div class="row"><span class="btn">Send to Maya →</span><span class="ghost">▶ Watch demo</span></div></section>
+</main></body></html>

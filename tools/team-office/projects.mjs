@@ -183,11 +183,22 @@ export function findProject(id) {
   return null;
 }
 
+/** Each project's number: the order the projects were first started in, hidden ones included (so a number never repeats). */
+function projectNumbers(byDir) {
+  const first = (p) => Math.min(...p.runs.map((r) => r.startedAt || r.endedAt || Infinity));
+  return new Map([...byDir.values()].sort((a, b) => first(a) - first(b)).map((p, i) => [p.dir, i + 1]));
+}
+
+/** The number the next new project gets. */
+export const nextProjectNumber = () => runsByProject().size + 1;
+
 export function portfolio({ appStatus = () => null, showHidden = false } = {}) {
   const hidden = new Set(readSettings().hiddenProjects);
   const current = readRun();
   const cards = [];
-  for (const p of runsByProject().values()) {
+  const byDir = runsByProject();
+  const numbers = projectNumbers(byDir);
+  for (const p of byDir.values()) {
     if (!showHidden && hidden.has(p.dir)) continue;
     const latest = p.runs[0];
     const built = p.runs.some((r) => r.status === "finished");
@@ -204,7 +215,9 @@ export function portfolio({ appStatus = () => null, showHidden = false } = {}) {
       exists,
       hidden: hidden.has(p.dir),
       isStudio: p.dir === ROOT,
+      no: numbers.get(p.dir),
       runs: p.runs.length,
+      builtSize: p.runs.find((r) => r.status === "finished")?.size || null, // the team size of its latest finished run
       // project status: an active run wins; otherwise a project that was ever built successfully counts as built
       // (a later failed/stopped run is shown as a note, not as the project's status)
       status: ACTIVE.includes(latest.status) ? latest.status : built ? "finished" : latest.status,

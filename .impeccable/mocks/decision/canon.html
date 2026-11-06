@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>The category standard</title>
+<style>
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;background:#f2f5f2;color:#000;font:400 15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{height:66px;background:#fff;border-bottom:1px solid #d6ded7;display:flex;align-items:center;gap:16px;padding:0 32px}
+.mark{width:34px;height:34px;border-radius:8px;background:#9cb29e;color:#000;display:grid;place-items:center;font-weight:700;font-size:12px}
+.head{font-size:18px;font-weight:600}.last{font-size:13px;color:#4a564b}
+.sw{margin-left:auto;display:flex;background:#eef2ee;border-radius:9px;padding:3px}.sw b{padding:7px 14px;font-size:14px;font-weight:500;border-radius:7px}.sw b.on{background:#fff;box-shadow:0 1px 2px #0002}
+.ic{width:36px;height:36px;border-radius:9px;border:1px solid #d6ded7;background:#fff}
+main{display:grid;grid-template-columns:1.3fr 1fr;grid-template-rows:1.12fr 1fr;gap:16px;padding:16px 32px;height:834px}
+.p{background:#fff;border:1px solid #d6ded7;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.ph{display:flex;gap:10px;align-items:baseline}.ph h2{font-size:17px;font-weight:650}.ph span{font-size:13px;color:#4a564b}
+.office{display:flex;gap:20px;flex:1}.screen{width:520px;height:292px;background:#20291f;border-radius:10px;position:relative}.screen i{position:absolute;background:#9cb29e;opacity:.45;border-radius:3px}
+.who{display:grid;gap:10px;align-content:center;font-size:14px}.who div{display:flex;gap:10px;align-items:center}.face{width:28px;height:28px;border-radius:8px;background:#e3eae3}
+.chat{background:#fff;border:1px solid #d6ded7;border-radius:14px;display:flex;flex-direction:column}.ch{padding:12px 16px;border-bottom:1px solid #e3eae3;display:flex;gap:10px;align-items:center}.ch small{margin-left:auto;background:#e8f0e8;color:#2c4a30;border-radius:99px;padding:2px 9px;font-size:12px}
+.log{flex:1;padding:14px;display:flex;flex-direction:column;gap:12px}.them{background:#f2f5f2;border-radius:14px;padding:10px 13px;max-width:88%}.me{align-self:flex-end;background:#9cb29e;border-radius:14px;padding:10px 13px}
+.in{display:flex;gap:8px;padding:10px 12px;border-top:1px solid #e3eae3}.in div{flex:1;border:1px solid #d6ded7;border-radius:10px;padding:10px;color:#6a766b}.in b{width:44px;border-radius:10px;background:#000}
+.card{border:1px solid #d6ded7;border-radius:12px;padding:12px 14px;display:grid;gap:8px;max-width:400px}.tag{background:#e8f0e8;border-radius:99px;padding:1px 9px;font-size:12px;justify-self:start}
+.btn{background:#000;color:#fff;border-radius:10px;padding:9px 14px;font-weight:600;font-size:14px}.ghost{border:1px solid #d6ded7;border-radius:10px;padding:8px 13px;font-size:14px}.row{display:flex;gap:8px}
+.start h3{font-size:34px;font-weight:700;letter-spacing:-.02em}.ta{border:1px solid #d6ded7;border-radius:12px;height:76px;padding:10px;color:#6a766b;font-size:16px}
+</style></head><body>
+<header><div class="mark">VDS</div><div><div class="head">Ready for your next idea</div><div class="last">Last job: Tic tac toe game: you vs the computer, in your browser</div></div><div class="sw"><b class="on">Simple</b><b>Behind the scenes</b></div><div class="ic"></div><div class="ic"></div><div class="ic"></div></header>
+<main>
+  <section class="p"><div class="ph"><h2>Team office</h2><span>See who's working on your project.</span></div><div class="office"><div class="screen"><i style="left:30px;top:30px;width:110px;height:40px"></i><i style="left:40px;top:150px;width:430px;height:6px"></i><i style="left:40px;top:230px;width:180px;height:40px"></i></div>
+    <div class="who"><div><span class="face"></span>Maya · Manages</div><div><span class="face"></span>Asha · Plans</div><div><span class="face"></span>Ben &amp; Chloe · Build</div><div><span class="face"></span>Diego, Emma &amp; Farid · Test</div><div><span class="face"></span>Grace · Reviews</div></div></div></section>
+  <aside class="chat"><div class="ch"><span class="face"></span><b>Maya</b><span style="color:#4a564b;font-size:13px">Studio manager</span><small>Online</small></div><div class="log"><div class="them">The game is built with JavaScript, which is the language web pages use.</div><div class="me">what programming language did you use?</div><div class="them">I can ask Asha to list exactly what's inside if you'd like.</div></div><div class="in"><div>Tell Maya what to build…</div><b></b></div></aside>
+  <section class="p"><div class="ph"><h2>My projects</h2><span>Open or update anything the team has built.</span></div><div class="card"><b style="font-size:18px">Tic Tac Toe</b><span class="tag">Ready</span><div class="row"><span class="btn">▶ Open</span><span class="ghost">✎ Change</span></div></div></section>
+  <section class="p start"><div class="ph"><h2>New project</h2></div><h3>What would you like to build?</h3><div class="ta">For example, a budget tracker with monthly totals…</div><div class="row"><span class="btn">Send to Maya →</span><span class="ghost">▶ Watch demo</span></div></section>
+</main></body></html>

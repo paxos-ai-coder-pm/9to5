@@ -1,4 +1,4 @@
-import { createOffice } from "./office.js";
+import { createOffice, portrait } from "./office.js";
 import { renderHeader, renderRoster, renderLegends, renderGraph, renderTimeline, renderLog } from "./panels.js";
 import { createDemo } from "./demo.js";
 import { createChat } from "./chat.js";
@@ -8,14 +8,14 @@ import { createPortfolio } from "./portfolio.js";
 import { createProgress } from "./progress.js";
 import { createSetup } from "./setup.js";
 import { isSimple, setView } from "./ui.js";
-
+import { AGENT_BY_ID } from "./agents.js";
 createPhone();
 
 const setup = createSetup({ onSettings: () => poll() });
 const chat = createChat({ onSetup: () => setup.show() });
 const studio = createStudio({ chat, setup });
 const portfolio = createPortfolio({ chat });
-const progress = createProgress({ chat, getProjects: portfolio.projects, onDemo: () => setMode("demo") });
+const progress = createProgress({ chat, getProjects: portfolio.projects, nextNo: portfolio.nextNo, onDemo: () => setMode("demo") });
 const office = createOffice({
   canvas: document.getElementById("canvas"),
   overlay: document.getElementById("overlay"),
@@ -24,6 +24,32 @@ const office = createOffice({
 });
 
 const $ = (id) => document.getElementById(id);
+
+// Simple view: who's who in the office, in plain words, grouped by what they do
+const WHO = [
+  [["manager"], "Manages"],
+  [["architect"], "Plans"],
+  [["dev-1", "dev-2"], "Build"],
+  [["tester-api", "tester-ui", "tester-edge"], "Test"],
+  [["reviewer"], "Reviews"],
+];
+$("whosWho").innerHTML = WHO.map(([ids, job]) => {
+  const names = ids.map((id) => AGENT_BY_ID[id].name);
+  const who = names.length > 1 ? `${names.slice(0, -1).join(", ")} & ${names.at(-1)}` : names[0];
+  return `<li><span class="faces" aria-hidden="true"></span><span><b>${who}</b><small>${job}</small></span></li>`;
+}).join("");
+// each one's portrait (the same 3D character as in the office), framed in their colour
+$("whosWho").querySelectorAll(".faces").forEach((el, i) => {
+  for (const id of WHO[i][0]) {
+    const face = portrait(AGENT_BY_ID[id]);
+    face.style.setProperty("--who", AGENT_BY_ID[id].color);
+    el.appendChild(face);
+  }
+});
+// Maya's face on the chat button and in the chat's header
+const mayaFace = `url(${portrait(AGENT_BY_ID.manager).toDataURL()})`;
+document.querySelectorAll(".fab-face").forEach((el) => (el.style.backgroundImage = mayaFace));
+
 let mode = new URLSearchParams(location.search).has("demo") ? "demo" : "live";
 let state = {};
 let lastStamp = 0;
@@ -51,8 +77,8 @@ function paintView() {
   $("viewTech").setAttribute("aria-pressed", String(!simple));
   office.setSimple(simple);
 }
-$("viewSimple").onclick = () => setView("simple");
-$("viewTech").onclick = () => setView("tech");
+$("viewSimple").onclick = () => !isSimple() && setView("simple", { turn: true });
+$("viewTech").onclick = () => isSimple() && setView("tech", { turn: true });
 window.addEventListener("viewchange", () => {
   paintView();
   apply(state);
@@ -80,7 +106,7 @@ function setMode(m) {
   } else {
     demo.stop();
     lastStamp = 0;
-    poll();
+    return poll();
   }
 }
 
@@ -116,9 +142,12 @@ async function poll() {
   }
 }
 
-$("demoBtn").onclick = () => setMode("demo");
 $("replayBtn").onclick = () => demo.start();
-$("liveBtn").onclick = () => setMode("live");
+$("liveBtn").onclick = async () => {
+  await setMode("live");
+  const idea = isSimple() && $("startText");
+  (idea || $("workspace")).focus();
+};
 $("tableBtn").onclick = (e) => {
   const on = e.currentTarget.getAttribute("aria-pressed") !== "true";
   e.currentTarget.setAttribute("aria-pressed", on);

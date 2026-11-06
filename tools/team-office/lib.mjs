@@ -182,9 +182,10 @@ export function event(state, e) {
 export const updateState = (fn) => withLock(() => { const s = readState(); const r = fn(s); writeState(s); return r; });
 export const updateChat = (fn) => withLock(() => { const c = readChat(); const r = fn(c); writeChat(c); return r; });
 
-export function setAgent(state, name, st, activity = "") {
+// `quiet`: update the agent's card without a line in the activity log (routine chat states would bury the team's work)
+export function setAgent(state, name, st, activity = "", { quiet = false } = {}) {
   state.agents[name] = { state: st, activity, since: Date.now() };
-  event(state, { type: "state", agent: name, state: st, msg: activity || st });
+  if (!quiet) event(state, { type: "state", agent: name, state: st, msg: activity || st });
 }
 
 // Environment for spawning the Claude CLI. Drops CLAUDECODE (lets it run from inside a Claude Code session) and,

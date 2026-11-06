@@ -14,7 +14,7 @@ for (const spec of [process.env.PLAYWRIGHT_MODULE, "playwright", "/opt/node22/li
   } catch {}
 }
 const executablePath = ["/opt/pw-browsers/chromium", process.env.CHROMIUM_PATH].filter(Boolean).find((p) => fs.existsSync(p));
-const skip = !chromium ? "Playwright not installed" : isWindows ? "integration tests need a POSIX shell" : false;
+const skip = !chromium && "Playwright not installed";
 const SHOTS = process.env.UI_SHOTS; // folder to save screenshots in (optional)
 
 const PROPOSE = (name) => `Great — here's the plan. Shall I get the team started?\nPROPOSE: ${name} | Build a page that says hello\nSIZE: quick`;
@@ -48,9 +48,14 @@ describe("office UI", { skip }, () => {
     };
   }
   const visible = (page, sel) => page.locator(sel).first().isVisible();
+  // switching views turns the page, so the new view is in place a frame after the click
+  const switchView = async (page, view) => {
+    await page.click(view === "tech" ? "#viewTech" : "#viewSimple");
+    await page.waitForFunction((tech) => document.documentElement.classList.contains("tech-view") === tech, view === "tech");
+  };
   // run a scenario on a fresh studio; always clean up (a leftover server would keep the test process alive)
   const scenario = (name, control, opts, fn) =>
-    test(name, async () => {
+    test(name, { skip: opts.posix && isWindows ? "requires the POSIX test fixture" : false }, async () => {
       const t = await open(control, opts);
       try {
         await fn(t);
@@ -66,7 +71,7 @@ describe("office UI", { skip }, () => {
     const { page } = t;
     assert.ok(await visible(page, "#welcome"));
     assert.ok(await visible(page, ".progress-panel"));
-    assert.match(await page.locator("#progress").innerText(), /Nothing is being built right now/);
+    assert.match(await page.locator("#progress").innerText(), /What would you like to build/);
     for (const tech of [".graph-panel", ".timeline-panel", ".log-panel", "#phases", "#hero", "#roster"]) assert.equal(await visible(page, tech), false, `${tech} hidden`);
     assert.equal(await visible(page, "#setup"), false, "setup is complete");
     assert.match(await page.locator("#overlay").innerText(), /Asha/);
@@ -80,7 +85,7 @@ describe("office UI", { skip }, () => {
 
   scenario("Behind the scenes shows the technical panels, and it's remembered", {}, {}, async (t) => {
     const { page } = t;
-    await page.click("#viewTech");
+    await switchView(page, "tech");
     assert.ok(await visible(page, ".graph-panel"));
     assert.equal(await visible(page, ".progress-panel"), false);
     assert.match(await page.locator("#overlay").innerText(), /architect/);
@@ -93,12 +98,12 @@ describe("office UI", { skip }, () => {
     assert.equal(await page.getAttribute("#tabProjects", "aria-selected"), "true");
     assert.ok(await visible(page, "#projects"));
     await t.shot("02-behind-the-scenes");
-    await page.click("#viewSimple");
+    await switchView(page, "simple");
     assert.match(await page.locator("#overlay").innerText(), /Asha/);
     assert.deepEqual(t.errors, []);
   });
 
-  scenario("signed out: the setup checklist says how to fix it; the chat explains instantly", { loggedIn: false }, {}, async (t) => {
+  scenario("signed out: the setup checklist says how to fix it; the chat explains instantly", { loggedIn: false }, { posix: true }, async (t) => {
     const { page } = t;
     await page.waitForSelector("#setup:not([hidden])");
     const text = await page.locator("#setup").innerText();
@@ -112,11 +117,11 @@ describe("office UI", { skip }, () => {
     await t.shot("03-signed-out");
   });
 
-  scenario("the whole journey: example → choices → Start → Ready → ▶ Open → the app", { lead: "finish", manager: ["Where will you use it?\nCHOICES: On my computer | On my phone", PROPOSE("hello-page")] }, {}, async (t) => {
+  scenario("the whole journey: example → choices → Start → Ready → ▶ Open → the app", { lead: "finish", manager: ["Where will you use it?\nCHOICES: On my computer | On my phone", PROPOSE("hello-page")] }, { posix: true }, async (t) => {
     const { page, ctx } = t;
     await page.click("#examples button >> nth=0");
-    assert.equal(await page.inputValue("#chatText"), "A simple to-do list I can use in my browser");
-    await page.press("#chatText", "Enter");
+    assert.equal(await page.inputValue("#startText"), "A simple to-do list I can use in my browser");
+    await page.press("#startText", "Enter");
     await page.waitForSelector(".choices button");
     await page.click(".choices button:has-text('On my computer')");
     await page.waitForSelector(".proposal [data-run='start']");
@@ -127,15 +132,15 @@ describe("office UI", { skip }, () => {
     await page.waitForSelector("#progress >> text=is ready", { timeout: 20000 });
     assert.ok(await visible(page, "#progress button:has-text('OPEN IT')"));
     await page.waitForSelector(".report >> text=What you got");
-    await page.waitForSelector(".pf-card button:has-text('▶ OPEN')");
+    await page.waitForSelector(".pf-card button:has-text('Open')");
     await t.shot("05-ready");
-    const [app] = await Promise.all([ctx.waitForEvent("page"), page.click(".pf-card button:has-text('▶ OPEN')")]);
+    const [app] = await Promise.all([ctx.waitForEvent("page"), page.click(".pf-card button:has-text('Open')")]);
     await app.waitForURL(/^http:\/\/localhost:4[5-9]\d\d\/$/, { timeout: 15000 }); // the app's own port, not the office's launch page
     assert.match(await app.locator("h1").innerText(), /Hello from the team v1/);
     assert.deepEqual(t.errors, []);
   });
 
-  scenario("a question with answer options: buttons in the banner, then the team carries on", { lead: "askopts", onResume: "finish", manager: [PROPOSE("layout-app")] }, {}, async (t) => {
+  scenario("a question with answer options: buttons in the banner, then the team carries on", { lead: "askopts", onResume: "finish", manager: [PROPOSE("layout-app")] }, { posix: true }, async (t) => {
     const { page } = t;
     await page.fill("#chatText", "Make me a page");
     await page.press("#chatText", "Enter");
@@ -154,7 +159,7 @@ describe("office UI", { skip }, () => {
     assert.equal(inbox.length, 2, "the run continued in a second (resumed) call");
   });
 
-  scenario("■ Stop, then ↻ Continue from the chat", { lead: "long", onResume: "finish", manager: [PROPOSE("long-app")] }, {}, async (t) => {
+  scenario("■ Stop, then ↻ Continue from the chat", { lead: "long", onResume: "finish", manager: [PROPOSE("long-app")] }, { posix: true }, async (t) => {
     const { page } = t;
     await page.fill("#chatText", "Build it");
     await page.press("#chatText", "Enter");
@@ -167,7 +172,7 @@ describe("office UI", { skip }, () => {
     await page.waitForSelector("#progress >> text=is ready", { timeout: 20000 });
   });
 
-  scenario("↶ Undo a change from the project card, then ↷ Redo", { lead: "finish", manager: [PROPOSE("undo-page")] }, {}, async (t) => {
+  scenario("↶ Undo a change from the project card, then ↷ Redo", { lead: "finish", manager: [PROPOSE("undo-page")] }, { posix: true }, async (t) => {
     const { page, s } = t;
     for (let i = 0; i < 2; i++) {
       await page.fill("#chatText", `Build version ${i + 1}`);
@@ -199,7 +204,7 @@ describe("office UI", { skip }, () => {
     await t.shot("08-settings");
     await page.click("#settingsSave");
     await page.waitForSelector("#settingsModal", { state: "hidden" });
-    await page.waitForFunction(() => document.getElementById("studioName").textContent === "PRIYA'S STUDIO");
+    await page.waitForFunction(() => document.getElementById("studioName").textContent === "Priya's Studio");
     assert.equal(await page.title(), "Priya's Studio");
     await page.click("#settingsBtn");
     await page.keyboard.press("Escape");
@@ -207,15 +212,109 @@ describe("office UI", { skip }, () => {
     assert.equal(await page.evaluate(() => document.activeElement.id), "settingsBtn", "focus returns to the button");
   });
 
-  scenario("phone-sized screen: chat starts collapsed, nothing overflows", {}, { width: 390, height: 844 }, async (t) => {
+  scenario("phone-sized screen: composer fits and chat keeps focus off the background", {}, { width: 320, height: 680 }, async (t) => {
     const { page } = t;
     assert.ok(await visible(page, "#chatFab"));
     assert.equal(await visible(page, "#chat"), false);
     assert.ok(await visible(page, "#welcome"));
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    assert.ok(await page.locator(".start-go").evaluate((e) => e.getBoundingClientRect().bottom <= innerHeight));
+    await page.locator(".start-go").click({ trial: true });
     await page.click("#chatFab");
     assert.ok(await visible(page, "#chat"));
+    assert.equal(await page.getAttribute("#chat", "aria-modal"), "true");
+    assert.ok(await page.locator(".progress-panel").evaluate((e) => e.inert));
+    assert.equal(await page.evaluate(() => document.activeElement.id), "chatText");
     await t.shot("09-phone");
+    await page.keyboard.press("Escape");
+    assert.equal(await visible(page, "#chat"), false);
+    assert.equal(await page.evaluate(() => document.activeElement.id), "chatFab");
+  });
+
+  scenario("wide Simple view: the whole landing page fits the window — office and chat side by side, projects and the composer below", {}, {}, async (t) => {
+    const { page } = t;
+    await page.waitForTimeout(1200); // the panels have risen into place
+    const box = (sel) => page.locator(sel).boundingBox();
+    const [office, chat, projects, start] = await Promise.all([".office-panel", "#chat", ".portfolio-panel", ".progress-panel"].map(box));
+    assert.ok(office.x < chat.x && Math.abs(office.y - chat.y) < 2, "the chat is beside the office");
+    assert.ok(projects.x < start.x && Math.abs(projects.y - start.y) < 2, "projects and the composer are side by side");
+    assert.ok(projects.y >= office.y + office.height - 2, "the office is on the first row");
+    // no page scrolling: every panel is inside the window (with the first-visit welcome strip on top, too)
+    assert.ok(await visible(page, "#welcome"));
+    assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).overflowY), "hidden");
+    for (const b of [office, chat, projects, start]) assert.ok(b.y + b.height <= 900 + 1, "inside the window");
+    assert.equal(await visible(page, "#chatMin"), false);
+    assert.equal(await visible(page, "#chatFab"), false);
+    // Behind the scenes: the chat is the side panel again, and can be minimized; back in Simple view it's shown anyway
+    await switchView(page, "tech");
+    await page.click("#chatMin");
+    assert.equal(await visible(page, "#chat"), false);
+    assert.ok(await visible(page, "#chatFab"));
+    await switchView(page, "simple");
+    assert.ok(await visible(page, "#chat"));
+    assert.equal(await visible(page, "#chatFab"), false);
+    await page.fill("#startText", "An idea to finish after the demo");
+    await page.locator('[data-go="demo"]').click();
+    assert.ok(await visible(page, "#demoBanner"));
+    await switchView(page, "tech");
+    await page.locator("#chatFab").click();
+    await page.locator("#replayBtn").click({ trial: true }); // the chat drawer leaves the banner controls reachable
+    await switchView(page, "simple");
+    await page.click("#liveBtn");
+    await page.waitForSelector("#startText");
+    assert.equal(await page.inputValue("#startText"), "An idea to finish after the demo");
+    assert.deepEqual(t.errors, []);
+  });
+
+  scenario("example prompts are editable and sending an idea preserves a separate chat draft", {}, {}, async (t) => {
+    const { page } = t;
+    let text;
+    await page.route("**/api/chat", (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      text = route.request().postDataJSON().text;
+      return route.fulfill({ json: { ok: true } });
+    });
+    await page.fill("#chatText", "An unrelated draft");
+    await page.click("#examples button >> nth=0");
+    assert.equal(await page.inputValue("#startText"), "A simple to-do list I can use in my browser");
+    assert.equal(await page.evaluate(() => document.activeElement.id), "startText");
+    await page.keyboard.type(" with tags");
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => document.getElementById("startText").value === "");
+    assert.equal(text, "A simple to-do list I can use in my browser with tags");
+    assert.equal(await page.inputValue("#chatText"), "An unrelated draft");
+  });
+
+  scenario("a message that can't be sent stays in its box, with a plain reason and what to do", {}, {}, async (t) => {
+    const { page } = t;
+    let fail = "server";
+    let sent;
+    await page.route("**/api/chat", (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      if (fail === "server") return route.fulfill({ status: 400, json: { error: "bad request" } });
+      if (fail === "offline") return route.abort("connectionrefused");
+      sent = route.request().postDataJSON().text;
+      return route.fulfill({ json: { ok: true } });
+    });
+    // the chat box
+    await page.fill("#chatText", "Hello Maya");
+    await page.press("#chatText", "Enter");
+    await page.waitForFunction(() => /Not sent/.test(document.getElementById("chatLog").innerText));
+    assert.equal(await page.inputValue("#chatText"), "Hello Maya", "the message is back in the box");
+    assert.match(await page.locator("#chatLog").innerText(), /the office couldn't take it\. Your message is still in the box/);
+    // the idea box: the explanation sits right under it
+    fail = "offline";
+    await page.fill("#startText", "A recipe book");
+    await page.click(".start-go");
+    await page.waitForFunction(() => document.getElementById("startFeedback").textContent);
+    assert.equal(await page.inputValue("#startText"), "A recipe book");
+    assert.match(await page.locator("#startFeedback").innerText(), /isn't responding — check that it's still running/);
+    // once it can be sent, it goes
+    fail = null;
+    await page.press("#chatText", "Enter");
+    await page.waitForFunction(() => document.getElementById("chatText").value === "");
+    assert.equal(sent, "Hello Maya");
+    assert.deepEqual(t.errors.filter((e) => !/Failed to load resource|ERR_CONNECTION_REFUSED/.test(e)), []);
   });
 
   // the page that opens a project: how-to steps for things that don't open in a browser, and a plain error

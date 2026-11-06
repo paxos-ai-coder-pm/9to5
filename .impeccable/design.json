@@ -1,0 +1,787 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-06T03:13:09.652Z",
+  "title": "Design System: Vikrant's Dev Studio",
+  "extensions": {
+    "colorMeta": {
+      "sage": {
+        "role": "primary",
+        "displayName": "Workshop Sage",
+        "tonalRamp": [
+          "#0f1410",
+          "#1f2a20",
+          "#344035",
+          "#9cb29e",
+          "#c3d2c4",
+          "#dfe8df",
+          "#eef3ee",
+          "#f8fbf8"
+        ]
+      },
+      "black": {
+        "role": "primary",
+        "displayName": "Ledger Black",
+        "tonalRamp": [
+          "#000000",
+          "#0a0d0a",
+          "#0f1410",
+          "#171e18",
+          "#232d24",
+          "#242e25",
+          "#2a352b",
+          "#344035"
+        ]
+      },
+      "sage-paper": {
+        "role": "neutral",
+        "displayName": "Pale Sage Paper",
+        "tonalRamp": [
+          "#0f1410",
+          "#1f2a20",
+          "#344035",
+          "#9cb29e",
+          "#c3d2c4",
+          "#dfe8df",
+          "#eef3ee",
+          "#f8fbf8"
+        ]
+      },
+      "sage-paper-pale": {
+        "role": "neutral",
+        "displayName": "Paler Sage",
+        "tonalRamp": [
+          "#0f1410",
+          "#1f2a20",
+          "#344035",
+          "#9cb29e",
+          "#c3d2c4",
+          "#dfe8df",
+          "#eef3ee",
+          "#f8fbf8"
+        ]
+      },
+      "sage-inset": {
+        "role": "neutral",
+        "displayName": "Sage Inset",
+        "tonalRamp": [
+          "#0f1410",
+          "#1f2a20",
+          "#344035",
+          "#9cb29e",
+          "#c3d2c4",
+          "#dfe8df",
+          "#eef3ee",
+          "#f8fbf8"
+        ]
+      },
+      "sage-grey": {
+        "role": "neutral",
+        "displayName": "Sage Grey",
+        "tonalRamp": [
+          "#0f1410",
+          "#1f2a20",
+          "#344035",
+          "#9cb29e",
+          "#c3d2c4",
+          "#dfe8df",
+          "#eef3ee",
+          "#f8fbf8"
+        ]
+      },
+      "sage-rule-tint": {
+        "role": "neutral",
+        "displayName": "Rule Tint",
+        "tonalRamp": [
+          "#0f1410",
+          "#1f2a20",
+          "#344035",
+          "#9cb29e",
+          "#c3d2c4",
+          "#dfe8df",
+          "#eef3ee",
+          "#f8fbf8"
+        ]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Soft Ink",
+        "tonalRamp": [
+          "#0f1410",
+          "#1f2a20",
+          "#344035",
+          "#9cb29e",
+          "#c3d2c4",
+          "#dfe8df",
+          "#eef3ee",
+          "#f8fbf8"
+        ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "tonalRamp": [
+          "#0f1410",
+          "#1f2a20",
+          "#344035",
+          "#9cb29e",
+          "#c3d2c4",
+          "#dfe8df",
+          "#eef3ee",
+          "#f8fbf8"
+        ]
+      },
+      "night-paper": {
+        "role": "neutral",
+        "displayName": "Night Paper",
+        "tonalRamp": [
+          "#000000",
+          "#0a0d0a",
+          "#0f1410",
+          "#171e18",
+          "#232d24",
+          "#242e25",
+          "#2a352b",
+          "#344035"
+        ]
+      },
+      "night-paper-raised": {
+        "role": "neutral",
+        "displayName": "Night Paper Raised",
+        "tonalRamp": [
+          "#000000",
+          "#0a0d0a",
+          "#0f1410",
+          "#171e18",
+          "#232d24",
+          "#242e25",
+          "#2a352b",
+          "#344035"
+        ]
+      },
+      "night-inset": {
+        "role": "neutral",
+        "displayName": "Night Inset",
+        "tonalRamp": [
+          "#000000",
+          "#0a0d0a",
+          "#0f1410",
+          "#171e18",
+          "#232d24",
+          "#242e25",
+          "#2a352b",
+          "#344035"
+        ]
+      },
+      "night-bubble": {
+        "role": "neutral",
+        "displayName": "Night Bubble",
+        "tonalRamp": [
+          "#000000",
+          "#0a0d0a",
+          "#0f1410",
+          "#171e18",
+          "#232d24",
+          "#242e25",
+          "#2a352b",
+          "#344035"
+        ]
+      },
+      "night-paused": {
+        "role": "neutral",
+        "displayName": "Night Paused",
+        "tonalRamp": [
+          "#000000",
+          "#0a0d0a",
+          "#0f1410",
+          "#171e18",
+          "#232d24",
+          "#242e25",
+          "#2a352b",
+          "#344035"
+        ]
+      },
+      "night-grid": {
+        "role": "neutral",
+        "displayName": "Night Grid",
+        "tonalRamp": [
+          "#000000",
+          "#0a0d0a",
+          "#0f1410",
+          "#171e18",
+          "#232d24",
+          "#242e25",
+          "#2a352b",
+          "#344035"
+        ]
+      },
+      "blocked-red": {
+        "role": "tertiary",
+        "displayName": "Blocked Red",
+        "tonalRamp": [
+          "#4a0f0b",
+          "#7a1913",
+          "#b3261e",
+          "#d9443a",
+          "#ff6b5e",
+          "#ff8a7e",
+          "#ffb4ab",
+          "#ffdad6"
+        ]
+      },
+      "blocked-red-night": {
+        "role": "tertiary",
+        "displayName": "Blocked Red (night)",
+        "tonalRamp": [
+          "#4a0f0b",
+          "#7a1913",
+          "#b3261e",
+          "#d9443a",
+          "#ff6b5e",
+          "#ff8a7e",
+          "#ffb4ab",
+          "#ffdad6"
+        ]
+      },
+      "blocked-red-night-text": {
+        "role": "tertiary",
+        "displayName": "Blocked Red text (night)",
+        "tonalRamp": [
+          "#4a0f0b",
+          "#7a1913",
+          "#b3261e",
+          "#d9443a",
+          "#ff6b5e",
+          "#ff8a7e",
+          "#ffb4ab",
+          "#ffdad6"
+        ]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "White (on red, light theme only)",
+        "tonalRamp": [
+          "#ffffff"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The start card's question; once per screen."
+      },
+      "display-fit": {
+        "displayName": "Display, fit-window",
+        "purpose": "The start card's question in the fit-window view (≥1101×600, Simple view)."
+      },
+      "display-container": {
+        "displayName": "Display, container step",
+        "purpose": "The start card's question at its first container step (≤246px tall)."
+      },
+      "display-phone": {
+        "displayName": "Display, phone",
+        "purpose": "The start card's question on a phone (≤600px)."
+      },
+      "display-step-30": {
+        "displayName": "Display step 30",
+        "purpose": "Start card's question at the next container step; the launch screen's title."
+      },
+      "display-step-26": {
+        "displayName": "Display step 26",
+        "purpose": "Start card's question at the smallest container step; the cover band's progress figure (condensed 68%)."
+      },
+      "ledger-numeral": {
+        "displayName": "Ledger Numeral",
+        "purpose": "Commission number in an entry's margin, under a small condensed 'No.'."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Cover band status line; the 'Right now' sentence."
+      },
+      "headline-compact": {
+        "displayName": "Headline compact",
+        "purpose": "The 'Right now' sentence at a container step; a dialog's success line."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Commission name; empty-state headings."
+      },
+      "title-compact": {
+        "displayName": "Title compact",
+        "purpose": "Commission name in the fit-window view; also the ask-banner question and the phone cover headline."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Base reading size, chat, fields. Rendered at 78% via size-adjust."
+      },
+      "ui-large": {
+        "displayName": "UI large",
+        "purpose": "Larger UI text: link buttons, dialog titles (800), the start button, help popovers, the chat button label (condensed). Weight varies 400-800 by role."
+      },
+      "ui": {
+        "displayName": "UI",
+        "purpose": "UI text: button labels, panel and chat titles (800), the commission number box (800), log text. Weight varies 400-800 by role."
+      },
+      "body-small": {
+        "displayName": "Body Small",
+        "purpose": "Captions, rows, legends, chips."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Condensed uppercase book hand: panel heads, welcome heading."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "Meta text, small buttons, tabs, launch studio name (800), chat role and model words."
+      },
+      "label-small": {
+        "displayName": "Label small",
+        "purpose": "Small labels (brand name, phases, stepper words, table heads, Maya's status), who's-who role words, signers and model tags."
+      },
+      "stamp": {
+        "displayName": "Stamp",
+        "purpose": "Sign-off stamps, status boxes, the 'No.' above a ledger numeral."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Code and logs only."
+      }
+    },
+    "themeRoles": {
+      "note": "Role tokens are CSS custom properties on :root in tools/team-office/public/style.css. Dark is the stylesheet default; light applies under prefers-color-scheme: light unless data-theme=\"dark\", or when data-theme=\"light\".",
+      "light": {
+        "--page": "#9cb29e",
+        "--paper": "#dfe8df",
+        "--paper-2": "#eef3ee",
+        "--inset": "#f8fbf8",
+        "--ink": "#000000",
+        "--text-primary": "#000000",
+        "--text-secondary": "#1f2a20",
+        "--text-muted": "#344035",
+        "--band": "#000000",
+        "--on-band": "#9cb29e",
+        "--on-band-soft": "#dfe8df",
+        "--accent": "#000000",
+        "--on-accent": "#9cb29e",
+        "--chat": "#000000",
+        "--chat-text": "#dfe8df",
+        "--chat-muted": "#9cb29e",
+        "--chat-rule": "#9cb29e",
+        "--bubble-them": "#9cb29e",
+        "--bubble-me": "#dfe8df",
+        "--good": "#000000",
+        "--on-good": "#9cb29e",
+        "--active": "#9cb29e",
+        "--on-active": "#000000",
+        "--ready": "#f8fbf8",
+        "--pending": "#344035",
+        "--critical": "#b3261e",
+        "--on-critical": "#ffffff",
+        "--bad-text": "#b3261e",
+        "--focus": "#000000",
+        "--grid": "#c9d6ca",
+        "--paused": "#c9d6ca",
+        "--lift": "0 1px 0 rgb(0 0 0 / .14), 0 18px 32px -16px rgb(23 33 24 / .5)",
+        "--lift-high": "0 2px 0 rgb(0 0 0 / .12), 0 40px 70px -26px rgb(23 33 24 / .6)"
+      },
+      "dark": {
+        "--page": "#000000",
+        "--paper": "#0f1410",
+        "--paper-2": "#171e18",
+        "--inset": "#0a0d0a",
+        "--ink": "#9cb29e",
+        "--text-primary": "#dfe8df",
+        "--text-secondary": "#c3d2c4",
+        "--text-muted": "#9cb29e",
+        "--band": "#9cb29e",
+        "--on-band": "#000000",
+        "--on-band-soft": "#1b241c",
+        "--accent": "#9cb29e",
+        "--on-accent": "#000000",
+        "--chat": "#0f1410",
+        "--chat-text": "#dfe8df",
+        "--chat-muted": "#9cb29e",
+        "--chat-rule": "#9cb29e66",
+        "--bubble-them": "#9cb29e",
+        "--bubble-me": "#2a352b",
+        "--good": "#9cb29e",
+        "--on-good": "#000000",
+        "--active": "#dfe8df",
+        "--on-active": "#000000",
+        "--ready": "#000000",
+        "--pending": "#9cb29e",
+        "--critical": "#ff6b5e",
+        "--on-critical": "#000000",
+        "--bad-text": "#ff8a7e",
+        "--focus": "#dfe8df",
+        "--grid": "#242e25",
+        "--paused": "#232d24",
+        "--lift": "inset 0 1px 0 rgb(223 232 223 / .12), 0 22px 40px -18px rgb(0 0 0 / .9)",
+        "--lift-high": "inset 0 1px 0 rgb(223 232 223 / .16), 0 36px 70px -24px rgb(0 0 0 / .95)"
+      },
+      "shared": {
+        "--rule": "1.5px",
+        "--ui": "\"Archivo\", system-ui, \"Segoe UI\", Roboto, sans-serif",
+        "--mono": "ui-monospace, \"Cascadia Mono\", Menlo, Consolas, monospace",
+        "--shell": "1480px",
+        "--gutter": "clamp(16px, 2.4vw, 32px)",
+        "--out": "cubic-bezier(.16, 1, .3, 1)"
+      }
+    },
+    "rule": {
+      "name": "rule",
+      "value": "1.5px",
+      "purpose": "Every border; emphasis thickens to 3px."
+    },
+    "fonts": {
+      "Archivo": {
+        "source": "tools/team-office/public/fonts/archivo-latin(-ext)-standard-normal.woff2",
+        "weight": "100 900",
+        "stretch": "62% 125%",
+        "sizeAdjust": "78%",
+        "license": "SIL OFL"
+      },
+      "bundledUnused": [
+        "Press Start 2P",
+        "VT323"
+      ],
+      "bundledUnusedNote": "Font files and licences remain in fonts/; no @font-face rule loads them."
+    },
+    "shadows": [
+      {
+        "name": "lift (dark)",
+        "value": "inset 0 1px 0 rgb(223 232 223 / .12), 0 22px 40px -18px rgb(0 0 0 / .9)",
+        "purpose": "A sheet on the desk at night: lit top edge, deep soft drop. Panels, banners/setup/welcome, ask-banner, in-grid chat, launch card."
+      },
+      {
+        "name": "lift-high (dark)",
+        "value": "inset 0 1px 0 rgb(223 232 223 / .16), 0 36px 70px -24px rgb(0 0 0 / .95)",
+        "purpose": "A sheet held above the desk at night: floating chat and dialogs."
+      },
+      {
+        "name": "lift (light)",
+        "value": "0 1px 0 rgb(0 0 0 / .14), 0 18px 32px -16px rgb(23 33 24 / .5)",
+        "purpose": "A sheet on the desk by day: 1px contact line, soft offset drop. Same surfaces as dark --lift."
+      },
+      {
+        "name": "lift-high (light)",
+        "value": "0 2px 0 rgb(0 0 0 / .12), 0 40px 70px -26px rgb(23 33 24 / .6)",
+        "purpose": "A sheet held up by day: floating chat and dialogs."
+      },
+      {
+        "name": "stamp-fall (transient)",
+        "value": "0 20px 16px -8px rgb(0 0 0 / .45) → 0 1px 1px 0 rgb(0 0 0 / .25) → 0 0 0 0 rgb(0 0 0 / 0)",
+        "purpose": "Only inside the stamp-land keyframes: the falling stamp's shadow shrinks as it nears the paper."
+      }
+    ],
+    "shadowsNote": "Shadows only via --lift / --lift-high (role tokens, defined per theme) and the falling stamp. No glows, glass, backdrop blur or gradient fills. The dialog scrim rgb(0 0 0 / .6) is the only overlay. Lifting never removes the 1.5px rule.",
+    "motion": [
+      {
+        "name": "ease-out (--out)",
+        "value": "cubic-bezier(.16, 1, .3, 1)",
+        "purpose": "Exponential ease-out: stamp press-and-settle, wheel roll, page-in, dialog rise, progress fill, press, scrim fade."
+      },
+      {
+        "name": "ease-in-fall",
+        "value": "cubic-bezier(.55, 0, 1, .45)",
+        "purpose": "A stamp falling toward the page (speeds up)."
+      },
+      {
+        "name": "ease-in-lift-away",
+        "value": "cubic-bezier(.55, 0, .75, .35)",
+        "purpose": "The old view lifting away in the page turn."
+      },
+      {
+        "name": "stamp-land",
+        "value": "stamp-land .7s both; 0% translateY(var(--fall-y,-18px)) scale(var(--fall-s,1.4)) rotateX(34deg) rotate(-8deg), opacity 0, shadow 0 20px 16px -8px (ease-in) → 22% opacity 1 → 52% translateY(0) scale(.92) rotate(-2deg), contact shadow (ease-out) → 56% ink on (--stamp-ink/--stamp-on) → 100% rest; perspective 520px on .stepper/.signoff",
+        "purpose": "The focal moment: a station's stamp falls, presses and leaves its ink when its step completes while you watch."
+      },
+      {
+        "name": "stamp-land-stepper",
+        "value": "--fall-y -18px, --fall-s 1.4 (defaults)",
+        "purpose": "Stepper station that just completed (.stepper li.stamped .dot)."
+      },
+      {
+        "name": "stamp-land-signoff",
+        "value": "--fall-y -9px, --fall-s 1.18; animation-delay calc(var(--i) * 150ms + 200ms)",
+        "purpose": "A newly finished project's sign-off strip (.signoff.landing .stamp); portfolio.js compares status with the previous refresh."
+      },
+      {
+        "name": "wheel-roll",
+        "value": "transform .9s var(--out); drum rotateX(var(--d) * 36deg), faces rotateX(i * -36deg) translateZ(1.08em), perspective 7em",
+        "purpose": "Numbering machine in the commission number box; --d counts cumulative turns so wheels only roll forward (progress.js roll())."
+      },
+      {
+        "name": "page-in",
+        "value": "page-in .6s var(--out) both; from perspective(1400px) rotateX(-72deg), opacity 0; transform-origin 50% 0",
+        "purpose": "A new commission entry turns into the book, hinged at its top rule (.pf-card.turning)."
+      },
+      {
+        "name": "page-away",
+        "value": "::view-transition-old(root) page-away .55s cubic-bezier(.55, 0, .75, .35) both; to perspective(2600px) rotateY(-90deg); transform-origin 0 50%; z-index 1; new view not animated",
+        "purpose": "Simple ⇄ Behind the scenes on a user click only (ui.js setView({turn})); never under reduced motion or without View Transition support."
+      },
+      {
+        "name": "sheet-up",
+        "value": "sheet-up .3s var(--out) both; from perspective(1200px) translateY(14px) rotateX(6deg)",
+        "purpose": "A dialog rises into your hands."
+      },
+      {
+        "name": "dialog-fade",
+        "value": "fade-in .15s var(--out) both",
+        "purpose": "Dialog scrim appearance."
+      },
+      {
+        "name": "state-change",
+        "value": ".12s",
+        "purpose": "Background/colour transitions on buttons, chips, tabs, switches; 1px press on :active."
+      },
+      {
+        "name": "progress-fill",
+        "value": "width .6s var(--out)",
+        "purpose": "Progress bar filling with ink."
+      },
+      {
+        "name": "two-step-blink",
+        "value": "steps(2): caret .9s, launch dots 1.2s",
+        "purpose": "Typing caret and launch progress; stepped, never a smooth pulse."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation: none; transition: none (all); view transitions off; stamps ink-in .3s linear, sign-off stagger 100ms",
+        "purpose": "prefers-reduced-motion: nothing moves, wheels jump, stamps fade their ink in."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "tiny",
+        "value": "370px"
+      },
+      {
+        "name": "chat-fab-compact",
+        "value": "420px"
+      },
+      {
+        "name": "phone",
+        "value": "600px"
+      },
+      {
+        "name": "one-column",
+        "value": "1100px"
+      },
+      {
+        "name": "desktop",
+        "value": "1101px"
+      },
+      {
+        "name": "tech-chat-docked-stack",
+        "value": "1300px"
+      },
+      {
+        "name": "fit-window",
+        "value": "min-width 1101px and min-height 600px (Simple view: no page scroll)"
+      },
+      {
+        "name": "container-start",
+        "value": "300 / 268 / 246 / 214px tall"
+      },
+      {
+        "name": "container-stage",
+        "value": "250px tall"
+      },
+      {
+        "name": "container-projects",
+        "value": "255 / 250 / 225px tall"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one primary action per card (\"Send to Maya\"). Accent fill; inverts per theme.",
+      "html": "<button class=\"ds-btn-primary\">Send to Maya <svg class=\"ds-icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 12h15m-6-6 6 6-6 6\"/></svg></button>",
+      "css": ".ds-btn-primary { font-family: var(--ui, Archivo, system-ui, sans-serif); font-weight: 650; font-size: 18px; line-height: 1.15; display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 9px 16px; border-radius: 0; cursor: pointer; transition: background-color .12s, color .12s, transform .12s cubic-bezier(.16,1,.3,1); background: var(--accent, #000000); color: var(--on-accent, #9cb29e); border: 1.5px solid var(--accent, #000000); } .ds-btn-primary:hover { background: color-mix(in srgb, var(--accent, #000000), var(--page, #9cb29e) 22%); } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: 3px solid var(--focus, #000000); outline-offset: 2px; } .ds-icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary actions (Watch demo, Change). Transparent with an ink rule.",
+      "html": "<button class=\"ds-btn-ghost\"><svg class=\"ds-icon\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"m8 5 12 7-12 7z\"/></svg> Watch demo</button>",
+      "css": ".ds-btn-ghost { font-family: var(--ui, Archivo, system-ui, sans-serif); font-weight: 650; font-size: 18px; line-height: 1.15; display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 9px 16px; border-radius: 0; cursor: pointer; transition: background-color .12s, color .12s, transform .12s cubic-bezier(.16,1,.3,1); background: transparent; color: var(--text-primary, #000000); border: 1.5px solid var(--ink, #000000); } .ds-btn-ghost:hover { background: color-mix(in srgb, var(--ink, #000000) 12%, transparent); } .ds-btn-ghost:active { transform: translateY(1px); } .ds-btn-ghost:focus-visible { outline: 3px solid var(--focus, #000000); outline-offset: 2px; } .ds-btn-ghost:disabled { opacity: .45; border-style: dashed; cursor: not-allowed; } .ds-icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }"
+    },
+    {
+      "name": "Idea Field",
+      "kind": "input",
+      "refersTo": "text-field",
+      "description": "The start card's idea box: inset fill, ink rule, square, 3px focus outline.",
+      "html": "<textarea class=\"ds-field\" rows=\"2\" placeholder=\"For example, a budget tracker with monthly totals…\"></textarea>",
+      "css": ".ds-field { width: 100%; min-height: 80px; resize: vertical; padding: 11px 13px; font: 20px/1.35 var(--ui, Archivo, system-ui, sans-serif); color: var(--text-primary, #000000); background: var(--inset, #f8fbf8); border: 1.5px solid var(--ink, #000000); border-radius: 0; } .ds-field::placeholder { color: var(--text-muted, #344035); opacity: 1; } .ds-field:focus { outline: 3px solid var(--focus, #000000); outline-offset: 0; }"
+    },
+    {
+      "name": "View Switch",
+      "kind": "nav",
+      "refersTo": "header-band",
+      "description": "Simple / Behind the scenes segmented control on the cover band; the selected segment inverts.",
+      "html": "<div class=\"ds-band\"><div class=\"ds-switch\"><button aria-pressed=\"true\">Simple</button><button aria-pressed=\"false\">Behind the scenes</button></div></div>",
+      "css": ".ds-band { background: var(--band, #000000); color: var(--on-band, #9cb29e); padding: 14px 20px; } .ds-switch { display: inline-flex; border: 1.5px solid var(--on-band, #9cb29e); } .ds-switch button { font: 500 17px/1.15 var(--ui, Archivo, system-ui, sans-serif); border: 0; border-radius: 0; background: transparent; color: var(--on-band, #9cb29e); padding: 8px 15px; min-height: 38px; cursor: pointer; transition: background-color .12s, color .12s; } .ds-switch button:hover { background: color-mix(in srgb, var(--on-band, #9cb29e) 16%, transparent); } .ds-switch button[aria-pressed=\"true\"] { background: var(--on-band, #9cb29e); color: var(--band, #000000); font-weight: 650; } .ds-switch button:focus-visible { outline: 3px solid var(--on-band, #9cb29e); outline-offset: 2px; }"
+    },
+    {
+      "name": "Suggestion Chip",
+      "kind": "chip",
+      "refersTo": "chip-suggestion",
+      "description": "Suggested ideas, chat suggestions and answer choices: ruled, transparent, square.",
+      "html": "<div class=\"ds-chips\"><button class=\"ds-chip\">To-do list</button><button class=\"ds-chip\">Budget tracker</button></div>",
+      "css": ".ds-chips { display: flex; gap: 8px; flex-wrap: wrap; } .ds-chip { font: 500 17px/1.2 var(--ui, Archivo, system-ui, sans-serif); background: transparent; color: var(--text-primary, #000000); border: 1.5px solid var(--ink, #000000); border-radius: 0; padding: 6px 12px; min-height: 36px; cursor: pointer; transition: background-color .12s; } .ds-chip:hover { background: color-mix(in srgb, currentColor 14%, transparent); } .ds-chip:focus-visible { outline: 3px solid var(--focus, #000000); outline-offset: 2px; }"
+    },
+    {
+      "name": "Status Stamps",
+      "kind": "custom",
+      "refersTo": "stamp-done",
+      "description": "The status grammar: filled done, sage in progress, hollow ready, dashed pending, red and struck blocked.",
+      "html": "<div class=\"ds-stamps\"><span class=\"ds-stamp done\">Built</span><span class=\"ds-stamp active\">Checking</span><span class=\"ds-stamp ready\">Ready</span><span class=\"ds-stamp pending\">Pending</span><span class=\"ds-stamp blocked\">Blocked</span></div>",
+      "css": ".ds-stamps { display: flex; gap: 8px; flex-wrap: wrap; } .ds-stamp { display: inline-flex; align-items: center; padding: 2px 7px; font: 800 14px/1.15 var(--ui, Archivo, system-ui, sans-serif); font-stretch: 68%; text-transform: uppercase; letter-spacing: .07em; border: 1.5px solid var(--ink, #000000); color: var(--text-primary, #000000); white-space: nowrap; } .ds-stamp.done { background: var(--good, #000000); color: var(--on-good, #9cb29e); border-color: var(--good, #000000); } .ds-stamp.active { background: var(--active, #9cb29e); color: var(--on-active, #000000); } .ds-stamp.ready { background: transparent; } .ds-stamp.pending { background: transparent; border-style: dashed; } .ds-stamp.blocked { color: var(--bad-text, #b3261e); border-color: var(--critical, #b3261e); text-decoration: line-through; text-decoration-thickness: 2px; }"
+    },
+    {
+      "name": "Stepper with Stamp Landing",
+      "kind": "custom",
+      "refersTo": "stamp-active",
+      "description": "Run stations as stamp boxes on one rule; a just-completed station's stamp falls in 3D, presses and leaves its ink (.7s). Reduced motion: the ink fades in.",
+      "html": "<ol class=\"ds-stepper\" style=\"--p:50%\"><li class=\"past\"><span class=\"ds-dot\"><svg class=\"ds-icon\" viewBox=\"0 0 24 24\"><path d=\"m5 12.5 4.5 4.5L19 7.5\"/></svg></span>Plan</li><li class=\"past stamped\"><span class=\"ds-dot\"><svg class=\"ds-icon\" viewBox=\"0 0 24 24\"><path d=\"m5 12.5 4.5 4.5L19 7.5\"/></svg></span>Build</li><li class=\"now\"><span class=\"ds-dot\">3</span>Check</li><li><span class=\"ds-dot\">4</span>Review</li><li><span class=\"ds-dot\">5</span>Done</li></ol>",
+      "css": ".ds-stepper { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; position: relative; perspective: 520px; font-family: var(--ui, Archivo, system-ui, sans-serif); } .ds-stepper::before { content: \"\"; position: absolute; top: 16px; left: 10%; right: 10%; height: 1.5px; background: linear-gradient(90deg, var(--ink, #000000) var(--p, 0%), color-mix(in srgb, var(--ink, #000000) 30%, transparent) 0); } .ds-stepper li { display: flex; flex-direction: column; align-items: center; gap: 7px; color: var(--text-muted, #344035); font-size: 15px; font-weight: 700; font-stretch: 68%; text-transform: uppercase; letter-spacing: .07em; position: relative; } .ds-dot { width: 34px; height: 34px; display: grid; place-items: center; font-weight: 800; background: var(--paper, #dfe8df); border: 1.5px solid var(--ink, #000000); } .ds-stepper li.past .ds-dot { background: var(--good, #000000); color: var(--on-good, #9cb29e); border-color: var(--good, #000000); } .ds-stepper li.now { color: var(--text-primary, #000000); } .ds-stepper li.now .ds-dot { background: var(--active, #9cb29e); color: var(--on-active, #000000); border-width: 3px; } .ds-stepper li.stamped .ds-dot { --stamp-ink: var(--good, #000000); --stamp-on: var(--on-good, #9cb29e); animation: ds-stamp-land .7s both; } @keyframes ds-stamp-land { 0% { transform: translateY(var(--fall-y, -18px)) scale(var(--fall-s, 1.4)) rotateX(34deg) rotate(-8deg); opacity: 0; background-color: transparent; color: transparent; box-shadow: 0 20px 16px -8px rgb(0 0 0 / .45); animation-timing-function: cubic-bezier(.55, 0, 1, .45); } 22% { opacity: 1; } 52% { transform: translateY(0) scale(.92) rotateX(0deg) rotate(-2deg); background-color: transparent; color: transparent; box-shadow: 0 1px 1px 0 rgb(0 0 0 / .25); animation-timing-function: cubic-bezier(.16, 1, .3, 1); } 56% { background-color: var(--stamp-ink); color: var(--stamp-on); } 100% { transform: none; background-color: var(--stamp-ink); color: var(--stamp-on); box-shadow: 0 0 0 0 rgb(0 0 0 / 0); } } @keyframes ds-ink-in { from { background-color: transparent; color: transparent; } } .ds-stepper .ds-icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; } @media (prefers-reduced-motion: reduce) { .ds-stepper * { animation: none !important; transition: none !important; } .ds-stepper li.stamped .ds-dot { animation: ds-ink-in .3s linear both !important; } }"
+    },
+    {
+      "name": "Commission Entry",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "A numbered commission ruled into the book: ledger numeral in the margin, title, sign-off strip with each station's signers. A new entry turns in like a page hinged at its top rule.",
+      "html": "<article class=\"ds-entry turning\"><div class=\"ds-no\"><small>No.</small>001</div><div class=\"ds-entry-body\"><h3>Tic Tac Toe</h3><p>Play against the computer in your browser.</p><ol class=\"ds-signoff\"><li><span class=\"ds-st\">Planned</span><span class=\"ds-signer\"><i style=\"background:#3987e5\"></i>Asha</span></li><li><span class=\"ds-st\">Built</span><span class=\"ds-signer\"><i style=\"background:#d95926\"></i>Ben &amp; Chloe</span></li><li><span class=\"ds-st\">Checked</span><span class=\"ds-signer\"><i style=\"background:#c98500\"></i>the testers</span></li><li><span class=\"ds-st\">Signed off</span><span class=\"ds-signer\"><i style=\"background:#9085e9\"></i>Grace</span></li></ol></div></article>",
+      "css": ".ds-entry { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 0 20px; padding: 14px 0; border-top: 1.5px solid var(--ink, #000000); font-family: var(--ui, Archivo, system-ui, sans-serif); color: var(--text-primary, #000000); } .ds-no { display: grid; align-content: start; font-size: 40px; font-weight: 800; font-stretch: 62%; line-height: .9; font-variant-numeric: tabular-nums; } .ds-no small { font-size: 14px; font-weight: 700; font-stretch: 68%; letter-spacing: .07em; text-transform: uppercase; color: var(--text-muted, #344035); margin-bottom: 3px; } .ds-entry-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; } .ds-entry h3 { margin: 0; font-size: 23px; font-weight: 750; } .ds-entry p { margin: 0; color: var(--text-secondary, #1f2a20); line-height: 1.3; } .ds-signoff { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, max-content); gap: 8px; } .ds-signoff li { display: grid; gap: 4px; } .ds-st { width: 92px; display: inline-flex; justify-content: center; padding: 2px 7px; font-size: 14px; font-weight: 800; font-stretch: 68%; text-transform: uppercase; letter-spacing: .07em; background: var(--good, #000000); color: var(--on-good, #9cb29e); border: 1.5px solid var(--good, #000000); } .ds-signer { display: flex; align-items: center; gap: 6px; font-size: 15px; color: var(--text-secondary, #1f2a20); } .ds-signer i { width: 6px; height: 6px; display: block; } .ds-entry.turning { transform-origin: 50% 0; animation: ds-page-in .6s cubic-bezier(.16,1,.3,1) both; } @keyframes ds-page-in { from { transform: perspective(1400px) rotateX(-72deg); opacity: 0; } } @media (prefers-reduced-motion: reduce) { .ds-entry, .ds-entry * { animation: none !important; } }"
+    },
+    {
+      "name": "Commission Number Box",
+      "kind": "custom",
+      "refersTo": "commission-no",
+      "description": "The start card's next number in an order-form box, on a numbering machine: three 3D drums of ten faces that roll forward (.9s ease-out). Hover the box to roll 007 to 008.",
+      "html": "<span class=\"ds-cno\">No. <span class=\"ds-wheels\" aria-hidden=\"true\"><span class=\"ds-wheel\"><span class=\"ds-drum\" style=\"--d:0\"><b style=\"--i:0\">0</b><b style=\"--i:1\">1</b><b style=\"--i:2\">2</b><b style=\"--i:3\">3</b><b style=\"--i:4\">4</b><b style=\"--i:5\">5</b><b style=\"--i:6\">6</b><b style=\"--i:7\">7</b><b style=\"--i:8\">8</b><b style=\"--i:9\">9</b></span></span><span class=\"ds-wheel\"><span class=\"ds-drum\" style=\"--d:0\"><b style=\"--i:0\">0</b><b style=\"--i:1\">1</b><b style=\"--i:2\">2</b><b style=\"--i:3\">3</b><b style=\"--i:4\">4</b><b style=\"--i:5\">5</b><b style=\"--i:6\">6</b><b style=\"--i:7\">7</b><b style=\"--i:8\">8</b><b style=\"--i:9\">9</b></span></span><span class=\"ds-wheel\"><span class=\"ds-drum\" style=\"--d:7\"><b style=\"--i:0\">0</b><b style=\"--i:1\">1</b><b style=\"--i:2\">2</b><b style=\"--i:3\">3</b><b style=\"--i:4\">4</b><b style=\"--i:5\">5</b><b style=\"--i:6\">6</b><b style=\"--i:7\">7</b><b style=\"--i:8\">8</b><b style=\"--i:9\">9</b></span></span></span></span>",
+      "css": ".ds-cno { display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--ink, #000000); border-radius: 0; padding: 2px 9px; font: 800 18px/1.15 var(--ui, Archivo, system-ui, sans-serif); color: var(--text-primary, #000000); white-space: nowrap; } .ds-wheels { display: inline-flex; gap: 2px; } .ds-wheel { position: relative; width: .66em; height: 1.36em; overflow: hidden; perspective: 7em; -webkit-mask-image: linear-gradient(transparent 10%, #000 38%, #000 62%, transparent 90%); mask-image: linear-gradient(transparent 10%, #000 38%, #000 62%, transparent 90%); } .ds-drum { --r: 1.08em; position: absolute; inset: 0; transform-style: preserve-3d; transform: translateZ(calc(var(--r) * -1)) rotateX(calc(var(--d, 0) * 36deg)); transition: transform .9s cubic-bezier(.16,1,.3,1); } .ds-drum b { position: absolute; inset: 50% 0 auto; height: .7em; margin-top: -.35em; display: grid; place-items: center; line-height: 1; font-weight: inherit; backface-visibility: hidden; transform: rotateX(calc(var(--i) * -36deg)) translateZ(var(--r)); } .ds-cno:hover .ds-wheel:last-child .ds-drum { --d: 8 !important; } @media (prefers-reduced-motion: reduce) { .ds-drum { transition: none; } }"
+    },
+    {
+      "name": "Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "A sheet of the book lying on the page: paper fill, 1.5px ink rule, square, --lift shadow, condensed label head with a muted caption and a square help button.",
+      "html": "<section class=\"ds-panel\"><div class=\"ds-panel-head\"><div><h2>Team office</h2><p>See who is working on your project.</p></div><button class=\"ds-help\" aria-label=\"Help\">?</button></div><p class=\"ds-panel-body\">Panel content.</p></section>",
+      "css": ".ds-panel { padding: 16px 18px; background: var(--paper, #dfe8df); border: 1.5px solid var(--ink, #000000); box-shadow: var(--lift, 0 1px 0 rgb(0 0 0 / .14), 0 18px 32px -16px rgb(23 33 24 / .5)); color: var(--text-primary, #000000); font-family: var(--ui, Archivo, system-ui, sans-serif); } .ds-panel-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 12px; } .ds-panel-head > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 12px; } .ds-panel-head h2 { margin: 0; font-size: 17px; font-weight: 800; font-stretch: 68%; text-transform: uppercase; letter-spacing: .07em; } .ds-panel-head p { margin: 0; font-size: 17px; color: var(--text-muted, #344035); } .ds-help { width: 32px; height: 32px; font: 700 17px/1 var(--ui, Archivo, system-ui, sans-serif); background: transparent; color: inherit; border: 1.5px solid var(--ink, #000000); border-radius: 0; cursor: pointer; } .ds-help:hover { background: color-mix(in srgb, var(--ink, #000000) 12%, transparent); } .ds-help:focus-visible { outline: 3px solid var(--focus, #000000); outline-offset: 2px; }"
+    },
+    {
+      "name": "Dialog",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "A sheet held up: paper, 1.5px rule, square, --lift-high, rising into place (.3s) over a 60% black scrim.",
+      "html": "<div class=\"ds-scrim\"><div class=\"ds-modal\" role=\"dialog\" aria-label=\"Settings\"><h2>Settings</h2><p>Choose light or dark, or follow the computer.</p><button class=\"ds-modal-btn\">Done</button></div></div>",
+      "css": ".ds-scrim { background: rgb(0 0 0 / .6); padding: 24px; display: grid; place-items: center; animation: ds-fade .15s cubic-bezier(.16,1,.3,1) both; } .ds-modal { width: min(420px, 100%); padding: 20px 22px; background: var(--paper, #dfe8df); color: var(--text-primary, #000000); border: 1.5px solid var(--ink, #000000); border-radius: 0; box-shadow: var(--lift-high, 0 2px 0 rgb(0 0 0 / .12), 0 40px 70px -26px rgb(23 33 24 / .6)); font-family: var(--ui, Archivo, system-ui, sans-serif); animation: ds-sheet-up .3s cubic-bezier(.16,1,.3,1) both; } .ds-modal h2 { margin: 0 0 8px; font-size: 19px; font-weight: 800; } .ds-modal p { margin: 0 0 14px; } .ds-modal-btn { font: 650 18px/1.15 var(--ui, Archivo, system-ui, sans-serif); min-height: 42px; padding: 9px 16px; border-radius: 0; cursor: pointer; background: var(--accent, #000000); color: var(--on-accent, #9cb29e); border: 1.5px solid var(--accent, #000000); transition: background-color .12s; } .ds-modal-btn:hover { background: color-mix(in srgb, var(--accent, #000000), var(--page, #9cb29e) 22%); } .ds-modal-btn:focus-visible { outline: 3px solid var(--focus, #000000); outline-offset: 2px; } @keyframes ds-sheet-up { from { transform: perspective(1200px) translateY(14px) rotateX(6deg); } } @keyframes ds-fade { from { opacity: 0; } } @media (prefers-reduced-motion: reduce) { .ds-scrim, .ds-modal { animation: none; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Order Book",
+    "overview": "The studio is a workshop's commission book. Every idea is a numbered commission, and the crew signs it off station by station with a stamp. The pages are sheets of sage and black paper divided by crisp 1.5px rules, with square corners. Depth comes only from the book as a physical object: a sheet lifts off the desk with a soft, offset shadow, a stamp falls and presses its ink into the page, a numbering machine's wheels roll, and pages turn on their hinge. There are no glows, no glass and no gradient fills. The system rejects the category default of a glowing dark dashboard with glass cards.\n\nThe book has two moods that follow the computer's setting, and Settings can force either one (`data-theme=\"light\" | \"dark\"` on the root). In the light theme the book lies open on the bench: sage ground, pale sage paper, black ink, a black cover band. In the dark theme the book is read at night: black ground, sage ink, a sage cover band. Each theme mirrors the other; only where ground and ink sit changes. Each theme also has its own light on the paper (a lit top edge at night, a contact line by day), carried by the same two lift tokens. One red exists, and it means \"error\" or \"blocked\". It is never decoration.\n\nTwo worlds share the screen on purpose. The pixel-art office and the teammates keep their own colours: name tags, portrait frames, signer squares, log dots and Maya's face on the chat button. The two-tone system frames them and never recolours them. Archivo, a single variable font bundled for offline use, carries every voice. Its condensed, uppercase, spaced cut is the book's hand for labels, numbers and stamps. Its normal width is for reading.",
+    "keyCharacteristics": [
+      "Two colours (sage `#9cb29e`, black `#000000`) with tints and shades, plus one red reserved for errors and blocked work.",
+      "Light and dark themes are exact inversions, chosen by the OS and overridable in Settings.",
+      "1.5px black (or sage) rules and 0px corners. Sheets sit on the page with a soft, offset paper shadow (`--lift`, `--lift-high`), never a glow.",
+      "Status is shown as a stamp in a fixed box: filled, sage, hollow, dashed, or red and struck through.",
+      "Motion comes only from the physical book: a stamp falls and presses, number wheels roll, pages turn, dialogs rise into your hands. Under reduced motion nothing moves and stamps fade their ink in.",
+      "The Simple view landing page fits a desktop window with no page scroll. Long content scrolls inside its own panel."
+    ],
+    "rules": [
+      {
+        "name": "The Two Inks Rule",
+        "body": "Every chrome surface, rule and text is either sage, black, or a tint or shade of sage. If a new colour is needed, use a sage tint first.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Red Rule",
+        "body": "Red means an error or blocked work, and nothing else. It is never used for emphasis, a brand accent or decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mirror Rule",
+        "body": "Each theme is the other with ground and ink swapped. Build every component against the role tokens (`--page`, `--paper`, `--ink`, `--accent`, `--on-accent`, `--band`, `--on-band`, `--lift`, `--lift-high`), never against a theme's literal value, so the inversion stays automatic.",
+        "section": "colors"
+      },
+      {
+        "name": "The Crew Keeps Its Colours Rule",
+        "body": "Teammate identity colours (name-tag squares, portrait frames, signer marks, log dots), the pixel office scenery and the pixel-art face on Maya's chat button sit outside the two-tone system. Never recolour them to sage or black, and never borrow them for chrome.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Hands Rule",
+        "body": "Condensed uppercase is for things the book prints or stamps: labels, numbers and statuses. Anything you read as a sentence uses normal width and sentence case.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Figures Rule",
+        "body": "Times, logs, tables, the progress figure and every commission number use tabular numerals.",
+        "section": "typography"
+      },
+      {
+        "name": "The Fits-The-Window Rule",
+        "body": "At ≥1101×600, the Simple view landing page never scrolls the page. The body is a 100dvh column. The header and banners take their natural height, and the grid takes the rest, with rows split 1.12fr / 1fr. Every panel is `min-height: 0`. Long content (old messages, many commissions, the start card's overflow) scrolls inside its own box. A visible thin scrollbar track marks the commission book as having more entries. The office screen sizes itself to `min(100cqw - 200px, (100cqh - 6px) × 16/9)`, with who's who beside it.",
+        "section": "layout"
+      },
+      {
+        "name": "The Paper Lift Rule",
+        "body": "A sheet's shadow is always `--lift` or `--lift-high`: offset downward, blurred, and the colour of the room, never the colour of the ink. Nothing else casts a shadow except a stamp while it is falling. No glows, no coloured or spread halos, no blur behind glass, no gradient fills.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Ruled And Lifted Rule",
+        "body": "Lifting a sheet never replaces its rule. Every lifted surface keeps its 1.5px ink border and square corners, and emphasis inside it is still a 3px rule, not a higher lift.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Physical Book Rule",
+        "body": "Every authored movement is something a real book, stamp or numbering machine does: a stamp falls and presses, a wheel rolls, a page turns on its hinge, a sheet is lifted into your hands. The ease-out is exponential (`--out`: `cubic-bezier(.16, 1, .3, 1)`); things that fall or lift away speed up instead (ease-in). Nothing bounces, pulses, glows or floats.",
+        "section": "components"
+      },
+      {
+        "name": "The Stamp Lands Rule",
+        "body": "The focal moment is a station's stamp landing, in .7s. The stamp starts above the page, tilted back (`rotateX(34deg) rotate(-8deg)`), enlarged and invisible, with a large soft shadow beneath it. It falls into view on an ease-in (`cubic-bezier(.55, 0, 1, .45)`), fully visible by 22%. At 52% it presses (`scale(.92)`, shadow shrunk to a contact line), then rises back to rest on the exponential ease-out; its ink (`--stamp-ink` / `--stamp-on`, the done colours) is on the page from 56%. The stepper and the sign-off strip set a 520px perspective. In the stepper, a station whose step completes while you watch falls from 18px above at 1.4×. When a project finishes while you watch, its sign-off strip's four stamps land one by one, falling from 9px at 1.18×, 150ms apart after a 200ms wait. The commission book compares each project's status with the previous refresh to decide this, so stamps land only for what just happened.",
+        "section": "components"
+      },
+      {
+        "name": "The Page Turn Rule",
+        "body": "A new commission entry turns in like a page hinged at its top rule (from `rotateX(-72deg)` on a 1400px perspective, transparent, over .6s on the ease-out). Switching between Simple and Behind the scenes by clicking the switch turns the page: the old view, drawn above the new one, lifts away from its left edge to `rotateY(-90deg)` on a 2600px perspective over .55s on an ease-in (`cubic-bezier(.55, 0, .75, .35)`), uncovering the new view beneath. It is a same-document View Transition and runs only on a user's click, only where the browser supports it.",
+        "section": "components"
+      },
+      {
+        "name": "The Still Book Rule",
+        "body": "Under `prefers-reduced-motion: reduce`, every animation and transition is removed and no view transition runs. The wheels jump straight to the number. The only thing that changes over time is a stamp's ink: it fades in over .3s, linear, with a finished project's four stamps 100ms apart.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "**Do** build every surface from the role tokens (`--page`, `--paper`, `--paper-2`, `--inset`, `--ink`, `--accent`/`--on-accent`, `--band`/`--on-band`, `--lift`/`--lift-high`) so both themes come for free.",
+      "**Do** separate surfaces with the 1.5px `--rule` and keep every chrome corner at 0px.",
+      "**Do** lift a sheet only with `--lift` (lying on the page) or `--lift-high` (floating chat, dialogs): a downward offset with a soft blur, plus the theme's lit edge or contact line.",
+      "**Do** express status only through the stamp grammar: filled done, sage in progress, hollow waiting, dashed pending, red and struck blocked.",
+      "**Do** set labels, stamps and numbers in condensed (62–72%) uppercase Archivo at 0.07em, with tabular figures for numbers.",
+      "**Do** keep text pairs at ≥4.5:1 (the floor is Muted Ink on sage, 4.80:1) and focus outlines at 3px.",
+      "**Do** keep the desktop Simple view (≥1101×600) free of page scroll. New content scrolls inside its panel, and container queries shed secondary lines before anything scrolls.",
+      "**Do** keep teammates' identity colours, the pixel office's own palette and Maya's pixel face untouched inside the two-tone frame.",
+      "**Do** take every movement from the physical-book set (stamp fall and press, wheel roll, page turn, sheet rise) and land it on the exponential ease-out; animate only what just happened while the person watched.",
+      "**Do** keep reduced motion still: no movement, no view transition, wheels jump, and stamps fade their ink in over .3s."
+    ],
+    "donts": [
+      "**Don't** cast a shadow outside the two lift tokens and the falling stamp, and never a hard offset block shadow. The day theme's 1px contact line belongs to `--lift`; it is not a device of its own.",
+      "**Don't** add glows, glass, backdrop blur or decorative gradient fills. A hard-stop gradient used as a progress rule, the overflow fade on a sideways-scrolling row and the number wheels' window mask are the only gradients, and all are functional.",
+      "**Don't** use red for anything but errors and blocked work.",
+      "**Don't** introduce a third hue into the chrome. Use a sage tint or shade instead.",
+      "**Don't** round corners or use round status dots in the chrome. The system's dot is a square.",
+      "**Don't** add motion outside the physical-book set: no bounce, pulse, float, parallax, hover lift or looping ambient movement. State changes stay short colour transitions.",
+      "**Don't** use the pixel fonts left in the fonts folder (Press Start 2P, VT323) for the interface. Archivo is the only interface face."
+    ]
+  }
+}

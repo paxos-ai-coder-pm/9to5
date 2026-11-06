@@ -14,7 +14,7 @@ import { zipDirectory, crc32, listFiles } from "../zip.mjs";
 import { createCheckpoint, restoreCheckpoint, gitAvailable, hasCheckpoint } from "../checkpoint.mjs";
 import { parseAuthStatus, resolveClaude } from "../health.mjs";
 import { createStreamParser } from "../stream.mjs";
-import { claudeEnv } from "../lib.mjs";
+import { claudeEnv, emptyState, setAgent, AGENTS } from "../lib.mjs";
 import { parseResetTime } from "../runner.mjs";
 import { REPO } from "./helpers.mjs";
 
@@ -214,6 +214,14 @@ test("zip: round-trips files and leaves out secrets, git and dependencies", () =
   }
 });
 
+test("setAgent: a quiet update changes the card without a line in the activity log", () => {
+  const s = emptyState("Build it");
+  setAgent(s, "manager", "working", "Replying to you", { quiet: true });
+  assert.deepEqual([s.agents.manager.state, s.agents.manager.activity, s.events.length], ["working", "Replying to you", 0]);
+  setAgent(s, "manager", "waiting", "Relayed 1 note(s) to team");
+  assert.equal(s.events.at(-1).msg, "Relayed 1 note(s) to team");
+});
+
 test("claudeEnv: a team run doesn't inherit the Claude Code session the office was started from", () => {
   const keep = { ...process.env };
   Object.assign(process.env, { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "parent-session", CLAUDE_CODE_REMOTE_SESSION_ID: "cse_parent", CLAUDE_CODE_CHILD_SESSION: "1", CLAUDE_CODE_MESSAGING_SOCKET: "/tmp/parent.sock", CLAUDE_CODE_MESSAGING_TOKEN: "t", CLAUDE_PID: "1", CLAUDE_CODE_MAX_OUTPUT_TOKENS: "8000" });
@@ -229,7 +237,8 @@ test("claudeEnv: a team run doesn't inherit the Claude Code session the office w
 });
 
 test("the team's instructions never have the model save files under .claude/ (Claude Code refuses that in a headless run)", () => {
-  const files = [path.join(REPO, ".claude", "skills", "team", "SKILL.md"), ...fs.readdirSync(path.join(REPO, ".claude", "agents")).map((f) => path.join(REPO, ".claude", "agents", f))];
+  // the team's own agents only (.claude/agents may also hold other tools' agents, e.g. Impeccable's)
+  const files = [path.join(REPO, ".claude", "skills", "team", "SKILL.md"), ...AGENTS.map((a) => path.join(REPO, ".claude", "agents", `${a}.md`))];
   for (const f of files) {
     const bad = fs.readFileSync(f, "utf8").split("\n").filter((l) => /\b(save|write|create|put)\b[^\n]{0,80}`\.claude\//i.test(l));
     assert.deepEqual(bad, [], path.basename(f));

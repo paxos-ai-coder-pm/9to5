@@ -30,7 +30,10 @@ function el(tag, attrs = {}, text) {
 // ---------------- header ----------------
 export function renderHeader(s) {
   const taskEl = document.getElementById("task");
-  taskEl.textContent = s.task ? `Current job: ${s.task}` : "";
+  // "Current" only while a run is going (or paused mid-way); a finished, failed or stopped run is the last job.
+  // Without an office run (a /team run in Claude Code) the board is all there is to go on.
+  const going = s.run ? ["running", "waiting", "needs-answer"].includes(s.run.status) : !["done", "idle"].includes(s.phase);
+  taskEl.textContent = s.task ? `${going ? "Current job" : "Last job"}: ${s.task}` : "";
   taskEl.title = s.task || "";
   taskEl.hidden = !s.task;
   // FIX only shows up once a fix loop actually happens (always showing it reads as "something will break")
@@ -63,7 +66,7 @@ export function renderHeader(s) {
 function modelBadge(mdl) {
   if (!mdl) return "";
   const tip = mdl.actual ? `Running on ${mdl.id}` : `Configured: ${mdl.id} (actual model shows once it runs)`;
-  return `<span class="model${mdl.actual ? " actual" : ""}" title="${esc(tip)}">⚙ ${esc(mdl.label)}</span>`;
+  return `<span class="model${mdl.actual ? " actual" : ""}" title="${esc(tip)}">${esc(mdl.label)}</span>`;
 }
 
 export function renderRoster(s, now) {
@@ -71,7 +74,7 @@ export function renderRoster(s, now) {
   const leadCard = `<li class="lead-card"><i class="sw" style="background:#f2f2ee"></i><div style="min-width:0">
       <span class="nm">team lead</span>
       <span class="st">Orchestrates the pipeline</span>
-      ${modelBadge(lead) || `<span class="model" title="Runs you start with /team use your Claude Code session's model">⚙ Your session's model</span>`}</div></li>`;
+      ${modelBadge(lead) || `<span class="model" title="Runs you start with /team use your Claude Code session's model">Your session's model</span>`}</div></li>`;
   document.getElementById("roster").innerHTML =
     leadCard +
     AGENTS.map((a) => {
@@ -79,7 +82,7 @@ export function renderRoster(s, now) {
       const m = AGENT_STATE[ag.state] || AGENT_STATE.idle;
       return `<li><i class="sw" style="background:${a.color}"></i><div style="min-width:0">
       <span class="nm">${a.id}</span>
-      <span class="st">${m.icon} ${m.label}${ag.since && ag.state !== "idle" ? ` · ${fmtDur(now - ag.since)}` : ""}</span>
+      <span class="st">${m.label}${ag.since && ag.state !== "idle" ? ` · ${fmtDur(now - ag.since)}` : ""}</span>
       <span class="ac" title="${esc(ag.activity)}">${esc(ag.activity || a.role)}</span>
       ${modelBadge(modelFor(s, a.id))}</div></li>`;
     }).join("");
@@ -88,13 +91,13 @@ export function renderRoster(s, now) {
 // ---------------- execution graph ----------------
 export function renderLegends() {
   document.getElementById("legend").innerHTML = Object.entries(STATUS)
-    .map(([k, v]) => `<li><span class="chip ${k}">${v.icon}</span>${v.label}</li>`)
+    .map(([k, v]) => `<li><span class="chip ${k}" aria-hidden="true"></span>${v.label}</li>`)
     .join("");
   document.getElementById("tlLegend").innerHTML =
     `<li><span class="sw-box" style="background:linear-gradient(90deg,${AGENTS.slice(0, 4).map((a) => a.color).join(",")})"></span>Working (agent color)</li>` +
-    `<li><span class="sw-box" style="box-shadow:inset 0 0 0 2px var(--text-muted)"></span>Waiting</li>` +
-    `<li><span class="chip blocked">✖</span>Found issues</li>` +
-    `<li><span class="chip done">✓</span>Finished</li>`;
+    `<li><span class="sw-box" style="border:2px solid var(--text-muted)"></span>Waiting</li>` +
+    `<li><span class="chip blocked" aria-hidden="true"></span>Found issues</li>` +
+    `<li><span class="chip done" aria-hidden="true"></span>Finished</li>`;
 }
 
 export function renderGraph(s) {
@@ -139,7 +142,7 @@ export function renderGraph(s) {
       const x1 = a.x + NW / 2, y1 = a.y + NH, x2 = b.x + NW / 2, y2 = b.y;
       const my = (y1 + y2) / 2;
       svg.appendChild(el("path", { class: "edge" + (byId[d].status === "done" ? " live" : ""), d: `M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2 - 2}` }));
-      svg.appendChild(el("rect", { x: x2 - 2, y: y2 - 4, width: 4, height: 4, fill: byId[d].status === "done" ? "#8a897f" : "#3a3a36" }));
+      svg.appendChild(el("rect", { x: x2 - 2, y: y2 - 4, width: 4, height: 4, fill: byId[d].status === "done" ? "var(--ink)" : "var(--grid)" }));
     }
   }
   for (const t of tasks) {
@@ -147,8 +150,7 @@ export function renderGraph(s) {
     const { x, y } = pos[t.id];
     const g = el("g", { class: `node ${st}`, transform: `translate(${x},${y})`, tabindex: 0 });
     g.appendChild(el("rect", { class: "frame", x: 1, y: 1, width: NW - 2, height: NH - 2 }));
-    g.appendChild(el("rect", { x: 7, y: 7, width: 16, height: 16, fill: { done: "#0ca30c", active: "#ffffff", ready: "#fab219", blocked: "#d03b3b", pending: "transparent" }[st], stroke: st === "pending" ? "#6b6a64" : "none", "stroke-width": 2 }));
-    g.appendChild(el("text", { x: 15, y: 20, "text-anchor": "middle", "font-size": 14, fill: st === "blocked" ? "#fff" : st === "pending" ? "#6b6a64" : "#111" }, STATUS[st].icon));
+    g.appendChild(el("rect", { class: "mark", x: 7, y: 7, width: 16, height: 16, fill: { done: "var(--good)", active: "var(--active)", ready: "var(--ready)", blocked: "var(--critical)", pending: "transparent" }[st], "stroke-dasharray": st === "pending" ? "3 2" : "none" }));
     g.appendChild(el("text", { class: "id", x: 30, y: 18 }, `${t.id} · ${STATUS[st].label.toUpperCase()}`));
     const owner = AGENT_BY_ID[t.owner];
     if (owner) g.appendChild(el("rect", { x: NW - 14, y: 7, width: 8, height: 8, fill: owner.color }));
@@ -156,7 +158,7 @@ export function renderGraph(s) {
     const hit = el("rect", { class: "hit", width: NW, height: NH });
     g.appendChild(hit);
     const html = () =>
-      `<b>${esc(t.id)} · ${STATUS[st].icon} ${STATUS[st].label}</b>${esc(t.title)}` +
+      `<b>${esc(t.id)} · ${STATUS[st].label}</b>${esc(t.title)}` +
       (t.owner ? `<br><span class="muted">owner:</span> ${esc(t.owner)}` : "") +
       (t.depends_on?.length ? `<br><span class="muted">depends on:</span> ${esc(t.depends_on.join(", "))}` : "") +
       (t.verify?.length ? `<br><span class="muted">verify:</span> ${esc(t.verify.join(" && "))}` : "") +
@@ -193,7 +195,7 @@ function renderTable(s) {
     ? `<table><thead><tr><th>ID</th><th>STATUS</th><th>TASK</th><th>OWNER</th><th>DEPENDS ON</th></tr></thead><tbody>${tasks
         .map((t) => {
           const st = taskStatus(t, tasks);
-          return `<tr><td>${esc(t.id)}</td><td><span class="chip ${st}">${STATUS[st].icon}</span> ${STATUS[st].label}</td><td>${esc(t.title)}${t.reason ? `<br><span class="muted">${esc(t.reason)}</span>` : ""}</td><td>${esc(t.owner || "—")}</td><td class="muted">${esc((t.depends_on || []).join(", ") || "—")}</td></tr>`;
+          return `<tr><td>${esc(t.id)}</td><td><span class="chip ${st}" aria-hidden="true"></span> ${STATUS[st].label}</td><td>${esc(t.title)}${t.reason ? `<br><span class="muted">${esc(t.reason)}</span>` : ""}</td><td>${esc(t.owner || "—")}</td><td class="muted">${esc((t.depends_on || []).join(", ") || "—")}</td></tr>`;
         })
         .join("")}</tbody></table>`
     : `<div class="empty">No tasks yet.</div>`;
@@ -235,7 +237,7 @@ export function renderTimeline(s, now) {
   phaseEv.forEach((e, i) => {
     const end = phaseEv[i + 1]?.t ?? t1;
     const x = X(e.t), w = Math.max(1, X(end) - x - 2);
-    svg.appendChild(el("rect", { x, y: 4, width: w, height: 16, fill: i % 2 ? "#2c2c29" : "#383835" }));
+    svg.appendChild(el("rect", { x, y: 4, width: w, height: 16, fill: i % 2 ? "var(--paper-2)" : "var(--grid)" }));
     if (w > 34) svg.appendChild(el("text", { x: x + 4, y: 17, "font-size": 15 }, e.phase.toUpperCase()));
   });
   if (!phaseEv.length) svg.appendChild(el("text", { x: LW, y: 17, class: "axis" }, "phases"));
@@ -253,23 +255,21 @@ export function renderTimeline(s, now) {
       const w = Math.max(2, X(end) - X(e.t) - 2);
       const by = y + 5, bh = RH - 10;
       let mark = null;
-      if (e.state === "working") mark = el("rect", { x, y: by, width: w, height: bh, rx: 3, fill: a.color });
-      else if (e.state === "waiting") mark = el("rect", { x: x + 1, y: by + 1, width: Math.max(1, w - 2), height: bh - 2, rx: 3, fill: "none", stroke: "#8a897f", "stroke-width": 2 });
+      if (e.state === "working") mark = el("rect", { x, y: by, width: w, height: bh, fill: a.color });
+      else if (e.state === "waiting") mark = el("rect", { x: x + 1, y: by + 1, width: Math.max(1, w - 2), height: bh - 2, fill: "none", stroke: "var(--text-muted)", "stroke-width": 2 });
       else if (e.state === "failed") {
         mark = el("g");
-        mark.appendChild(el("rect", { x, y: by, width: Math.max(12, Math.min(w, 16)), height: bh, rx: 3, fill: "#d03b3b" }));
-        mark.appendChild(el("text", { x: x + 6, y: by + bh - 3, "text-anchor": "middle", fill: "#fff", "font-size": 14 }, "✖"));
+        mark.appendChild(el("rect", { x, y: by, width: Math.max(12, Math.min(w, 16)), height: bh, fill: "var(--critical)" }));
       } else if (e.state === "done") {
         mark = el("g");
-        mark.appendChild(el("rect", { x, y: by, width: 12, height: bh, rx: 3, fill: "#0ca30c" }));
-        mark.appendChild(el("text", { x: x + 6, y: by + bh - 3, "text-anchor": "middle", fill: "#111", "font-size": 14 }, "✓"));
+        mark.appendChild(el("rect", { x, y: by, width: 12, height: bh, fill: "var(--good)" }));
       }
       if (!mark) return;
       svg.appendChild(mark);
       const hit = el("rect", { class: "bar-hit", x: X(e.t), y, width: Math.max(12, X(end) - X(e.t)), height: RH });
       const m = AGENT_STATE[e.state] || AGENT_STATE.idle;
       hit.addEventListener("mousemove", (ev) =>
-        showTip(ev, `<b>${esc(a.id)} · ${m.icon} ${m.label}</b>${esc(e.msg || "")}<br><span class="muted">${fmtDur(e.t - t0)} → ${fmtDur(end - t0)} · ${fmtDur(end - e.t)}</span>`),
+        showTip(ev, `<b>${esc(a.id)} · ${m.label}</b>${esc(e.msg || "")}<br><span class="muted">${fmtDur(e.t - t0)} → ${fmtDur(end - t0)} · ${fmtDur(end - e.t)}</span>`),
       );
       hit.addEventListener("mouseleave", hideTip);
       svg.appendChild(hit);

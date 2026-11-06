@@ -12,10 +12,10 @@ export function createSetup({ onSettings } = {}) {
     const list = onlyProblems ? checks.filter((c) => !c.ok && (c.required || !c.unknown)) : checks;
     return list
       .map((c) => {
-        const icon = c.ok ? "✓" : c.unknown ? "?" : c.required ? "✖" : "–";
+        const icon = c.ok ? '<svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>' : c.required && !c.unknown ? '<svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>' : ""; // unknown / optional: an empty box
         const cls = c.ok ? "ok" : c.required && !c.unknown ? "bad" : "opt";
         const fix = !c.ok && c.fix
-          ? `<div class="fix">${esc(c.fix.text)}${c.fix.command ? `<div class="cmd"><code>${esc(c.fix.command)}</code><button type="button" class="px-btn small ghost" data-copy="${esc(c.fix.command)}">COPY</button></div>` : ""}${c.fix.link ? ` <a href="${esc(c.fix.link)}" target="_blank" rel="noopener noreferrer">How to install ↗</a>` : ""}</div>`
+          ? `<div class="fix">${esc(c.fix.text)}${c.fix.command ? `<div class="cmd"><code>${esc(c.fix.command)}</code><button type="button" class="px-btn small ghost" data-copy="${esc(c.fix.command)}">Copy</button></div>` : ""}${c.fix.link ? ` <a href="${esc(c.fix.link)}" target="_blank" rel="noopener noreferrer">How to install ↗</a>` : ""}</div>`
           : "";
         return `<li class="check-item ${cls}"><span class="ci" aria-hidden="true">${icon}</span><div><b>${esc(c.label)}</b>${c.required ? "" : ' <span class="muted">(optional)</span>'} <span class="muted">— ${esc(c.detail || "")}</span>${fix}</div></li>`;
       })
@@ -39,10 +39,10 @@ export function createSetup({ onSettings } = {}) {
   }
   async function recheck(btn) {
     btn.disabled = true;
-    btn.textContent = "CHECKING…";
+    btn.textContent = "Checking…";
     await load(true);
     btn.disabled = false;
-    btn.textContent = "↻ CHECK AGAIN";
+    btn.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-redo"/></svg> Check again';
     if (health?.ready) forced = false;
     render();
   }

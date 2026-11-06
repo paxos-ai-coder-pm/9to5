@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>The Job Traveller</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;background:#f2f5f2;color:#000;font:400 15px/1.4 Archivo,sans-serif}
+header{height:72px;display:flex;align-items:center;gap:20px;padding:0 32px;border-bottom:2px solid #000}
+.mark{width:38px;height:38px;background:#000;color:#9cb29e;display:grid;place-items:center;font:800 14px Archivo;font-stretch:62%}
+.head{font-size:21px;font-weight:600}.last{font-size:13px;color:#3a4639}
+.sw{margin-left:auto;display:flex;background:#9cb29e;padding:3px}.sw b{padding:8px 15px;font-size:14px}.sw b.on{background:#000;color:#9cb29e}
+.ic{width:38px;height:38px;border:2px solid #000}
+main{display:grid;grid-template-columns:1.3fr 1fr;grid-template-rows:1.12fr 1fr;gap:16px;padding:16px 32px;height:828px}
+.p{border:2px solid #000;background:#fff;padding:14px 18px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.ph{display:flex;gap:12px;align-items:baseline}.ph h2{font:800 15px Archivo;font-stretch:65%;text-transform:uppercase;letter-spacing:.1em}.ph span{font-size:13px;color:#3a4639}
+.office{display:flex;gap:20px;flex:1;min-height:0}
+.screen{width:520px;height:292px;background:#9cb29e;border:2px solid #000;position:relative}.screen i{position:absolute;background:#000;opacity:.6}
+.who{display:grid;gap:10px;align-content:center}.who div{display:flex;gap:10px;align-items:center}.who em{display:block;font-style:normal;font-size:12px;color:#3a4639}.face{width:30px;height:30px;border:2px solid #000;background:#9cb29e}
+.chat{border:2px solid #000;background:#9cb29e;display:flex;flex-direction:column}
+.ch{display:flex;gap:10px;align-items:center;padding:12px 16px;border-bottom:2px solid #000}.ch b{font:800 16px Archivo;font-stretch:65%;letter-spacing:.1em}.ch small{margin-left:auto;background:#000;color:#9cb29e;padding:3px 9px;font-size:12px}
+.log{flex:1;padding:14px;display:flex;flex-direction:column;gap:12px}.them{background:#fff;border:2px solid #000;padding:10px 13px;max-width:88%}.me{align-self:flex-end;background:#000;color:#9cb29e;padding:10px 13px}
+.in{display:flex;gap:8px;padding:10px 12px;border-top:2px solid #000}.in div{flex:1;background:#fff;border:2px solid #000;padding:10px;color:#3a4639}.in b{width:44px;background:#000}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{border:2px solid #000;padding:12px;display:grid;gap:8px}.card .last-stamp{border:2px solid #000;padding:2px 7px;font:700 11px Archivo;font-stretch:70%;text-transform:uppercase;justify-self:start}
+.btn{background:#000;color:#9cb29e;padding:9px 14px;font-weight:700;font-size:14px}.ghost{border:2px solid #000;padding:8px 13px;font-size:14px;font-weight:600}.row{display:flex;gap:8px}
+.trav{display:grid;grid-template-columns:1fr 200px;gap:16px;flex:1}
+.trav h3{font:800 40px/1.02 Archivo;font-stretch:72%}
+.ta{border:2px solid #000;height:76px;padding:10px;color:#3a4639;font-size:17px;background:#f2f5f2}
+.stations{display:grid;grid-template-rows:repeat(5,1fr);border:2px solid #000}
+.stations div{border-top:2px solid #000;padding:6px 8px;display:flex;justify-content:space-between;align-items:center;font:700 12px Archivo;font-stretch:70%;text-transform:uppercase}.stations div:first-child{border:0}
+.box{width:22px;height:22px;border:2px solid #000}.box.on{background:#000}
+</style></head><body>
+<header><div class="mark">VDS</div><div><div class="head">Ready for your next idea</div><div class="last">Last job: Tic tac toe game: you vs the computer, in your browser</div></div><div class="sw"><b class="on">Simple</b><b>Behind the scenes</b></div><div class="ic"></div><div class="ic"></div><div class="ic"></div></header>
+<main>
+  <section class="p"><div class="ph"><h2>Team office</h2><span>See who's working on your project.</span></div>
+    <div class="office"><div class="screen"><i style="left:30px;top:30px;width:100px;height:40px"></i><i style="left:40px;top:130px;width:430px;height:6px"></i><i style="left:40px;top:220px;width:180px;height:44px"></i></div>
+      <div class="who"><div><span class="face"></span><span><b>Maya</b><em>Manages</em></span></div><div><span class="face"></span><span><b>Asha</b><em>Plans</em></span></div><div><span class="face"></span><span><b>Ben &amp; Chloe</b><em>Build</em></span></div><div><span class="face"></span><span><b>Diego, Emma &amp; Farid</b><em>Test</em></span></div><div><span class="face"></span><span><b>Grace</b><em>Reviews</em></span></div></div></div></section>
+  <aside class="chat"><div class="ch"><span class="face"></span><span><b>MAYA</b><br><span style="font-size:12px">Studio manager</span></span><small>Online</small></div>
+    <div class="log"><div class="them">The game is built with JavaScript, which is the language web pages use.</div><div class="me">what programming language did you use?</div><div class="them">I can ask Asha to list exactly what's inside if you'd like.</div></div>
+    <div class="in"><div>Tell Maya what to build…</div><b></b></div></aside>
+  <section class="p"><div class="ph"><h2>My projects</h2><span>Open or update anything the team has built.</span></div>
+    <div class="cards"><div class="card"><b style="font-size:20px">Tic Tac Toe</b><span class="last-stamp">Signed off · Grace</span><div class="row"><span class="btn">▶ Open</span><span class="ghost">✎ Change</span></div></div>
+      <div class="card" style="border-style:dashed;place-content:center;justify-items:center"><b style="font-size:22px">+ Start a project</b></div></div></section>
+  <section class="p"><div class="ph"><h2>Job traveller</h2><span>Travels with your idea through every station.</span></div>
+    <div class="trav"><div style="display:grid;gap:10px;align-content:start"><h3>What would you like to build?</h3><div class="ta">For example, a budget tracker with monthly totals…</div><div class="row"><span class="btn">Send to Maya →</span><span class="ghost">▶ Watch demo</span></div></div>
+      <div class="stations"><div>Brief · Maya <span class="box"></span></div><div>Plan · Asha <span class="box"></span></div><div>Build · Ben &amp; Chloe <span class="box"></span></div><div>Check · 3 testers <span class="box"></span></div><div>Sign-off · Grace <span class="box"></span></div></div></div></section>
+</main></body></html>

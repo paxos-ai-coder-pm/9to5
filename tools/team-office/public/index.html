@@ -16,55 +16,71 @@
   </script>
 </head>
 <body>
-  <a class="skip" href="#chatText">Skip to the chat</a>
+  <a class="skip" href="#workspace">Skip to the workspace</a>
+  <svg class="icon-library" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M11 18h2"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="m9 3-.7 2.2-2 .9L4 5.6 2.5 8.2 4 10v2.4l-1.5 1.9L4 17l2.3-.5 2 1L9 20h3l.7-2.5 2-1 2.3.5 1.5-2.7-1.5-1.9V10l1.5-1.8L17 5.6l-2.3.5-2-.9L12 3z" transform="translate(1.5 .5)"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V22m-3 0h6"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 12 7-12 7z"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24"><path d="M20 5v5h-5M20 10a8 8 0 1 0 1.5 6"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></symbol>
+    <symbol id="i-ask" viewBox="0 0 24 24"><path d="M4 4h16v12H10l-6 4z"/><path d="M10 8.5a2 2 0 1 1 2.8 1.8c-.5.3-.8.7-.8 1.2M12 13.5v.01"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M4 5v5h5M4 10a8 8 0 1 1-1.5 6"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3c0 5-4 9-9 9 5 0 9 4 9 9 0-5 4-9 9-9-5 0-9-4-9-9Z"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 11h18"/></symbol>
+  </svg>
   <header class="top">
-    <div class="brand">
-      <div class="logo-mark">
-        <svg class="logo-tile" viewBox="0 0 44 44" width="44" height="44" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" aria-hidden="true">
-          <rect width="44" height="44" fill="var(--warning)"/>
-          <rect x="0" y="0" width="44" height="2" fill="rgba(255,255,255,0.28)"/>
-          <rect x="0" y="0" width="2" height="44" fill="rgba(255,255,255,0.28)"/>
-          <rect x="0" y="42" width="44" height="2" fill="rgba(0,0,0,0.18)"/>
-          <rect x="42" y="0" width="2" height="44" fill="rgba(0,0,0,0.18)"/>
-          <text id="logoAbbr" x="22" y="22" text-anchor="middle" dominant-baseline="central"
-            font-family="'Press Start 2P', monospace" font-size="10"
-            fill="var(--on-accent)" letter-spacing="1">VDS</text>
-        </svg>
-        <h1 id="studioName">VIKRANT'S DEV STUDIO</h1>
+    <div class="top-inner">
+      <div class="brand">
+        <!-- the mark: the studio's initials stamped in a box -->
+        <span class="brand-mark logo-abbr" aria-hidden="true">VDS</span>
+        <div class="brand-text">
+          <h1 id="studioName">Vikrant's Dev Studio</h1>
+          <p class="headline" id="headline" aria-live="polite">Getting the office ready…</p>
+          <p class="task" id="task" hidden></p>
+        </div>
       </div>
-      <div class="brand-text">
-        <p class="headline" id="headline" aria-live="polite">Getting the office ready…</p>
-        <p class="task" id="task" hidden></p>
+      <div class="top-right">
+        <div class="view-switch" role="group" aria-label="Studio view">
+          <button type="button" id="viewSimple" aria-pressed="true">Simple</button>
+          <button type="button" id="viewTech" aria-pressed="false">Behind the scenes</button>
+        </div>
+        <div class="top-tools">
+          <button class="icon-btn" id="notifyBtn" type="button" aria-label="Notifications" title="Notify me when the team needs me or finishes" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg></button>
+          <button class="icon-btn" id="phoneBtn" type="button" aria-label="Phone" title="Talk to Maya from your phone (Telegram)"><svg class="icon" aria-hidden="true"><use href="#i-phone"/></svg></button>
+          <button class="icon-btn" id="settingsBtn" type="button" aria-label="Settings" title="Settings and setup checklist"><svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg></button>
+        </div>
       </div>
-    </div>
-    <ol class="phases tech" id="phases" aria-label="Pipeline phase"></ol>
-    <div class="top-right">
-      <div class="hero tech" id="hero">
-        <div class="hero-num"><span id="pct">0</span><small>%</small></div>
-        <div class="hero-sub" id="heroSub">0 / 0 tasks</div>
-        <div class="bar" role="progressbar" aria-label="Tasks done" aria-valuemin="0" aria-valuemax="100" id="bar"><i></i></div>
+      <div class="top-pipeline tech">
+        <ol class="phases" id="phases" aria-label="Pipeline phase"></ol>
+        <div class="hero" id="hero">
+          <div class="hero-num"><span id="pct">0</span><small>%</small></div>
+          <div class="hero-sub" id="heroSub">0 / 0 tasks</div>
+          <div class="bar" role="progressbar" aria-label="Tasks done" aria-valuemin="0" aria-valuemax="100" id="bar"><i></i></div>
+        </div>
       </div>
-      <div class="view-switch" role="group" aria-label="How much to show">
-        <button type="button" id="viewSimple" aria-pressed="true">Simple</button>
-        <button type="button" id="viewTech" aria-pressed="false">Behind the scenes</button>
-      </div>
-      <button class="icon-btn" id="notifyBtn" aria-label="Notifications" title="Notify me when the team needs me or finishes" aria-pressed="false">🔔</button>
-      <button class="icon-btn" id="phoneBtn" aria-label="Phone" title="Talk to the manager from your phone (Telegram)">📱</button>
-      <button class="icon-btn" id="settingsBtn" aria-label="Settings" title="Settings and setup checklist">⚙</button>
     </div>
   </header>
 
   <!-- shown until everything the studio needs is installed and signed in -->
   <section class="setup" id="setup" hidden aria-labelledby="setupTitle">
-    <h2 id="setupTitle">ALMOST READY — FINISH SETTING UP</h2>
+    <h2 id="setupTitle">Almost ready — finish setting up</h2>
     <p class="setup-intro">The team runs on Claude Code on this computer. Fix the items below (it takes a minute), then press <b>Check again</b>.</p>
     <ul class="checks" id="setupChecks"></ul>
-    <div class="setup-actions"><button class="px-btn" id="setupRecheck" type="button">↻ CHECK AGAIN</button></div>
+    <div class="setup-actions"><button class="px-btn" id="setupRecheck" type="button"><svg class="icon" aria-hidden="true"><use href="#i-redo"/></svg> Check again</button></div>
   </section>
 
   <!-- the team is waiting for the user's answer (T ask) -->
   <div class="ask-banner" id="askBanner" role="region" aria-label="The team needs your answer" hidden>
-    <span class="ask-icon" aria-hidden="true">❓</span>
+    <span class="ask-icon" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-ask"/></svg></span>
     <div class="ask-body">
       <div class="ask-from" id="askFrom"></div>
       <div class="ask-text" id="askText"></div>
@@ -74,56 +90,85 @@
 
   <!-- shown when nothing has been built yet -->
   <section class="welcome" id="welcome" hidden aria-labelledby="welcomeTitle">
-    <h2 id="welcomeTitle">WELCOME TO YOUR DEV STUDIO</h2>
-    <ol class="steps">
-      <li><b>Tell the manager what to build</b> in the chat — a new app, a feature, a bug fix. Plain words are fine.</li>
-      <li><b>Approve the plan</b> when the team posts it (one click).</li>
-      <li><b>Watch the team work</b>, then press <b>▶ Open</b> to use what they built. You'll be told when it's done.</li>
-    </ol>
-    <div class="examples" id="examples">
-      <span>Try:</span>
-      <button type="button">A simple to-do list I can use in my browser</button>
-      <button type="button">A monthly budget tracker for my household</button>
-      <button type="button">Rename all my photos in a folder by the date they were taken</button>
+    <div class="welcome-flow">
+      <h2 id="welcomeTitle">How it works</h2>
+      <ol class="steps">
+        <li>Describe an idea</li>
+        <li>Approve the plan</li>
+        <li>Open your project</li>
+      </ol>
     </div>
-    <div class="welcome-actions">
-      <button class="px-btn ghost small" id="demoBtn" type="button">▶ WATCH A DEMO RUN</button>
-      <button class="px-btn ghost small" id="welcomeClose" type="button">DISMISS</button>
-    </div>
+    <button class="icon-btn" id="welcomeClose" type="button" aria-label="Dismiss introduction" title="Dismiss introduction"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button>
   </section>
 
   <div class="banner demo" id="demoBanner" hidden>
-    <span>🎮 DEMO MODE — a pretend run, to show how it works</span>
-    <button class="px-btn" id="replayBtn" type="button">↺ REPLAY</button>
-    <button class="px-btn ghost" id="liveBtn" type="button">EXIT DEMO</button>
+    <span><b>Demo</b> — a pretend run, to show how it works</span>
+    <button class="px-btn" id="replayBtn" type="button"><svg class="icon" aria-hidden="true"><use href="#i-redo"/></svg> Replay</button>
+    <button class="px-btn ghost" id="liveBtn" type="button">Exit demo</button>
   </div>
-  <div class="banner" id="banner" role="alert" hidden><span>⚠ Can't reach the office. Start it again with <code>devstudio</code> (or run <code>node tools/team-office/server.mjs</code>).</span></div>
+  <div class="banner" id="banner" role="alert" hidden><span><b>Can't reach the office.</b> Start it again with <code>devstudio</code> (or run <code>node tools/team-office/server.mjs</code>).</span></div>
 
-  <main class="grid">
+  <main class="grid" id="workspace" tabindex="-1">
     <section class="panel progress-panel simple-only" aria-labelledby="progressTitle">
-      <div class="panel-head"><h2 id="progressTitle">RIGHT NOW</h2></div>
+      <div class="panel-head"><h2 id="progressTitle">Right now</h2></div>
       <div id="progress" class="progress"></div>
     </section>
 
+    <aside class="chat" id="chat" tabindex="-1" aria-label="Chat with Maya, your manager">
+      <header class="chat-head">
+        <span class="fab-face" aria-hidden="true"></span>
+        <div class="chat-title">
+          <h2>Maya <span class="chat-model tech" id="chatModel"></span></h2>
+          <span class="chat-role">Studio manager</span>
+        </div>
+        <span class="chat-status" id="chatStatus">Online</span>
+        <button class="icon-btn" id="chatMin" type="button" aria-label="Minimize the chat" title="Minimize chat"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button>
+      </header>
+      <div class="run-bar" id="runBar" hidden></div>
+      <div class="queue-bar" id="queueBar" hidden></div>
+      <ol class="chat-log" id="chatLog"></ol>
+      <div class="sr-only" id="chatLive" aria-live="polite"></div>
+      <div class="chat-suggest" id="chatSuggest" aria-label="Suggested messages"></div>
+      <form class="chat-input" id="chatForm">
+        <textarea id="chatText" rows="1" maxlength="4000" placeholder="Tell Maya what to build…" aria-label="Message to the manager"></textarea>
+        <button type="button" class="icon-btn mic" id="micBtn" aria-label="Dictate" title="Dictate (types what you say)" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-mic"/></svg></button>
+        <button type="submit" class="px-btn send" id="sendBtn" aria-label="Send" title="Send (Enter)"><svg class="icon" aria-hidden="true"><use href="#i-send"/></svg></button>
+      </form>
+    </aside>
+
     <section class="panel office-panel" aria-labelledby="officeTitle">
       <div class="panel-head">
-        <h2 id="officeTitle">THE OFFICE</h2>
-        <button class="help" aria-label="Help: the office" data-help="Each character is a teammate. They walk to their desk when they're working; speech bubbles show what they're doing. Click Maya (the manager) to chat. The whiteboard has one sticky note per part of the job.">?</button>
+        <div><h2 id="officeTitle">Team office</h2><p class="panel-caption">See who’s working on your project.</p></div>
+        <button class="help" type="button" aria-label="Help: the office" data-help="Each character is a teammate. They walk to their desk when they're working, and speech bubbles show what they're doing. Click Maya to chat. The whiteboard has one sticky note per task.">?</button>
       </div>
-      <div class="office" id="office">
-        <canvas id="canvas" width="384" height="216" role="img" aria-label="Pixel-art office where the team works"></canvas>
-        <div class="overlay" id="overlay" aria-hidden="true"></div>
-        <div class="tip" id="tip" hidden></div>
+      <div class="office-stage">
+        <div class="office" id="office">
+          <canvas id="canvas" width="384" height="216" role="img" aria-label="3D office where the team works"></canvas>
+          <div class="overlay" id="overlay" aria-hidden="true"></div>
+          <div class="tip" id="tip" hidden></div>
+        </div>
+        <ul class="whos-who simple-only" id="whosWho" aria-label="Who's who in the office"></ul>
+        <ul class="roster tech" id="roster" aria-label="The team"></ul>
       </div>
-      <ul class="roster tech" id="roster" aria-label="The team"></ul>
+    </section>
+
+    <section class="panel portfolio-panel" aria-labelledby="portfolioTitle">
+      <div class="panel-head">
+        <div><h2 id="portfolioTitle">My projects</h2><p class="panel-caption">Open or update anything the team has built.</p></div>
+        <div class="head-actions">
+          <button class="px-btn small ghost" id="showHidden" type="button" aria-pressed="false" hidden>Show removed</button>
+          <button class="help" type="button" aria-label="Help: my projects" data-help="Open runs a project for you. Change something asks the team for updates. You can undo past changes from the card’s history.">?</button>
+        </div>
+      </div>
+      <div class="portfolio" id="portfolio"><p class="empty-note">Loading projects…</p></div>
     </section>
 
     <section class="panel graph-panel tech" aria-labelledby="graphTitle">
       <div class="panel-head">
-        <h2 id="graphTitle">TASK PLAN <small>who does what, in which order</small></h2>
+        <h2 id="graphTitle">Task plan <small>who does what, in which order</small></h2>
         <div class="head-actions">
-          <button class="px-btn small ghost" id="tableBtn" type="button" aria-pressed="false">LIST VIEW</button>
-          <button class="help" aria-label="Help: task plan" data-help="The plan broken into tasks. Arrows mean 'must finish first'. Green = done, white = in progress, yellow = ready to start, red = blocked. Hover a task for details.">?</button>
+          <button class="px-btn small ghost" id="tableBtn" type="button" aria-pressed="false">List view</button>
+          <button class="help" aria-label="Help: task plan" data-help="The plan broken into tasks. Arrows mean 'must finish first'. Filled = done, sage = in progress, hollow = ready to start, red = blocked, dashed = waiting for an earlier task. Hover a task for details.">?</button>
         </div>
       </div>
       <ul class="legend" id="legend"></ul>
@@ -133,7 +178,7 @@
 
     <section class="panel timeline-panel tech" aria-labelledby="timelineTitle">
       <div class="panel-head">
-        <h2 id="timelineTitle">TIMELINE</h2>
+        <h2 id="timelineTitle">Timeline</h2>
         <button class="help" aria-label="Help: timeline" data-help="When each teammate was working (colored bars), waiting (outlined) or found problems (✖). The strip on top shows the pipeline phase.">?</button>
       </div>
       <ul class="legend" id="tlLegend"></ul>
@@ -142,57 +187,27 @@
 
     <section class="panel log-panel tech" aria-label="Activity, past runs and lessons">
       <div class="panel-head tabs" role="tablist" aria-label="Activity, past runs and lessons">
-        <button role="tab" class="tab" id="tabLog" aria-controls="log" aria-selected="true">ACTIVITY</button>
-        <button role="tab" class="tab" id="tabProjects" aria-controls="projects" aria-selected="false">PAST RUNS</button>
-        <button role="tab" class="tab" id="tabLessons" aria-controls="lessons" aria-selected="false">LESSONS</button>
+        <button role="tab" class="tab" id="tabLog" aria-controls="log" aria-selected="true">Activity</button>
+        <button role="tab" class="tab" id="tabProjects" aria-controls="projects" aria-selected="false">Past runs</button>
+        <button role="tab" class="tab" id="tabLessons" aria-controls="lessons" aria-selected="false">Lessons</button>
       </div>
       <ol class="log" id="log" role="tabpanel" aria-labelledby="tabLog" tabindex="0"></ol>
       <ul class="projects" id="projects" role="tabpanel" aria-labelledby="tabProjects" hidden></ul>
       <div class="lessons" id="lessons" role="tabpanel" aria-labelledby="tabLessons" hidden></div>
     </section>
 
-    <section class="panel portfolio-panel" aria-labelledby="portfolioTitle">
-      <div class="panel-head">
-        <h2 id="portfolioTitle">MY PROJECTS <small>everything the team has built</small></h2>
-        <div class="head-actions">
-          <button class="px-btn small ghost" id="showHidden" type="button" aria-pressed="false" hidden>SHOW REMOVED</button>
-          <button class="help" aria-label="Help: my projects" data-help="One card per project the team has worked on. ▶ Open runs it for you. ✎ Change something asks the team for changes. Past changes can be undone from the card's history.">?</button>
-        </div>
-      </div>
-      <div class="portfolio" id="portfolio"><p class="empty-note">Loading projects…</p></div>
-    </section>
   </main>
 
-  <button class="chat-fab" id="chatFab" type="button" aria-label="Open the chat with Maya, your manager" hidden>
-    <span class="fab-face" aria-hidden="true"></span>CHAT<span class="badge" id="chatBadge" hidden></span>
+  <button class="chat-fab" id="chatFab" type="button" aria-label="Chat with Maya" aria-controls="chat" title="Chat with Maya" hidden>
+    <span class="fab-face" aria-hidden="true"></span><span class="chat-fab-label">Chat with Maya</span><span class="badge" id="chatBadge" hidden></span>
   </button>
-  <aside class="chat" id="chat" aria-label="Chat with Maya, your manager">
-    <header class="chat-head">
-      <span class="fab-face" aria-hidden="true"></span>
-      <div class="chat-title">
-        <h2>MAYA <span class="chat-role">your manager</span><span class="chat-model tech" id="chatModel"></span></h2>
-        <span class="chat-status" id="chatStatus">● online</span>
-      </div>
-      <button class="icon-btn" id="chatMin" type="button" aria-label="Minimize the chat" title="Minimize">▁</button>
-    </header>
-    <div class="run-bar" id="runBar" hidden></div>
-    <div class="queue-bar" id="queueBar" hidden></div>
-    <ol class="chat-log" id="chatLog"></ol>
-    <div class="sr-only" id="chatLive" aria-live="polite"></div>
-    <div class="chat-suggest" id="chatSuggest" aria-label="Suggested messages"></div>
-    <form class="chat-input" id="chatForm">
-      <textarea id="chatText" rows="1" maxlength="4000" placeholder="Tell Maya what to build…" aria-label="Message to the manager"></textarea>
-      <button type="button" class="icon-btn mic" id="micBtn" aria-label="Dictate" title="Dictate (types what you say)" aria-pressed="false">🎤</button>
-      <button type="submit" class="px-btn send" id="sendBtn" aria-label="Send" title="Send (Enter)">➤</button>
-    </form>
-  </aside>
   <div class="help-pop" id="helpPop" role="tooltip" hidden></div>
 
   <!-- connect your phone (Telegram) -->
   <div class="modal-back" id="phoneModal" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="phoneTitle">
       <div class="modal-head">
-        <h2 id="phoneTitle">📱 TALK TO THE MANAGER FROM YOUR PHONE</h2>
+        <h2 id="phoneTitle">Talk to the manager from your phone</h2>
         <button class="icon-btn" id="phoneClose" type="button" aria-label="Close" title="Close">✕</button>
       </div>
       <div id="phoneBody"></div>
@@ -203,14 +218,14 @@
   <div class="modal-back" id="settingsModal" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
       <div class="modal-head">
-        <h2 id="settingsTitle">⚙ SETTINGS</h2>
+        <h2 id="settingsTitle">Settings</h2>
         <button class="icon-btn" id="settingsClose" type="button" aria-label="Close" title="Close">✕</button>
       </div>
       <form id="settingsForm" class="settings-form">
         <label for="setName">Studio name</label>
         <input id="setName" maxlength="40" autocomplete="off" />
         <label for="setDir">Where projects are saved</label>
-        <div class="row"><input id="setDir" autocomplete="off" spellcheck="false" /><button class="px-btn small ghost" id="setDirDefault" type="button">USE DEFAULT</button></div>
+        <div class="row"><input id="setDir" autocomplete="off" spellcheck="false" /><button class="px-btn small ghost" id="setDirDefault" type="button">Use default</button></div>
         <p class="m-note" id="setDirNote"></p>
         <label class="check"><input type="checkbox" id="setLight" /> <span><b>Lighter team</b> — every teammate runs on Sonnet. Uses less of your Claude plan; planning and the final check may be a little less thorough.</span></label>
         <h3 class="modal-sub models-sub">AI models in use</h3>
@@ -222,7 +237,7 @@
           <label><input type="radio" name="theme" value="light" /> Light</label>
         </fieldset>
         <p class="m-error" id="settingsError" role="alert" hidden></p>
-        <div class="row end"><button class="px-btn" type="submit" id="settingsSave">SAVE</button></div>
+        <div class="row end"><button class="px-btn" type="submit" id="settingsSave">Save</button></div>
       </form>
       <h3 class="modal-sub">Setup checklist</h3>
       <ul class="checks" id="settingsChecks"></ul>
